@@ -8,23 +8,14 @@ import { useUserContext } from '../context/UserContext';
 // ============================================================
 const BlueWave = () => (
     <div className="absolute bottom-0 left-0 w-full z-0 pointer-events-none overflow-hidden">
-        <svg viewBox="0 0 1440 180" className="w-full h-[140px]" preserveAspectRatio="none">
+        <svg viewBox="0 0 1440 170" className="w-full h-[130px]" preserveAspectRatio="none">
             <defs>
-                <filter id="waveAdminShadow">
-                    <feDropShadow dx="0" dy="-6" stdDeviation="14" floodColor="#3B82F6" floodOpacity="0.15" />
+                <filter id="waveHeadShadow">
+                    <feDropShadow dx="0" dy="-6" stdDeviation="12" floodColor="#3B82F6" floodOpacity="0.15" />
                 </filter>
             </defs>
-            <path
-                fill="#3B82F6"
-                filter="url(#waveAdminShadow)"
-                d="M0,130 C200,180 380,70 580,120 C780,170 980,50 1180,100 C1300,130 1390,150 1440,140 L1440,180 L0,180 Z"
-                opacity="0.30"
-            />
-            <path
-                fill="#2563EB"
-                d="M0,155 C180,120 360,175 540,145 C720,115 900,165 1080,135 C1200,115 1360,165 1440,150 L1440,180 L0,180 Z"
-                opacity="0.45"
-            />
+            <path fill="#3B82F6" filter="url(#waveHeadShadow)" d="M0,120 C240,170 480,60 720,110 C960,160 1180,50 1440,100 L1440,170 L0,170 Z" opacity="0.28" />
+            <path fill="#2563EB" d="M0,145 C180,110 360,165 540,135 C720,105 900,158 1080,125 C1200,105 1360,155 1440,142 L1440,170 L0,170 Z" opacity="0.42" />
         </svg>
     </div>
 );
@@ -37,7 +28,7 @@ export default function DashboardAdmin() {
     const [searchTerm, setSearchTerm] = useState('');
     const [roleFilter, setRoleFilter] = useState('All Role');
     const [activeMenu, setActiveMenu] = useState('dashboard');
-    const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+    const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth > 768);
     const [selectedUser, setSelectedUser] = useState<any>(null);
     const [deleteConfirmUser, setDeleteConfirmUser] = useState<any>(null);
     const [alertMessage, setAlertMessage] = useState<string | null>(null);
@@ -99,18 +90,26 @@ export default function DashboardAdmin() {
     const totalStaff = users.filter(u => u.role === 'Staff IT').length;
 
     return (
-        <div className="min-h-screen bg-[#EEF5FF] flex font-sans overflow-hidden relative">
+        <div className="flex h-screen bg-[#F0F6FF] font-sans overflow-hidden relative">
 
             {/* Ambient blobs */}
             <div className="absolute top-[-15%] right-[-10%] w-[55vw] h-[55vw] rounded-full bg-blue-200/20 blur-[130px] pointer-events-none z-0" />
             <div className="absolute bottom-[-10%] left-[-15%] w-[45vw] h-[45vw] rounded-full bg-indigo-200/15 blur-[100px] pointer-events-none z-0" />
 
+            {/* ============ OVERLAY MOBILE ============ */}
+            {isSidebarOpen && (
+                <div 
+                    className="md:hidden fixed inset-0 bg-slate-900/50 z-40 backdrop-blur-sm"
+                    onClick={() => setIsSidebarOpen(false)}
+                ></div>
+            )}
+
             {/* ============ SIDEBAR BIRU ============ */}
-            <div className={`${isSidebarOpen ? 'w-64' : 'w-20'} bg-gradient-to-b from-[#3B82F6] via-[#2563EB] to-[#1E40AF] shadow-2xl transition-all duration-300 ease-in-out flex flex-col relative z-50 shrink-0 border-r border-blue-500/30`}>
+            <div className={`fixed md:relative z-50 h-full ${isSidebarOpen ? 'translate-x-0 w-64' : '-translate-x-full w-64 md:translate-x-0 md:w-20'} bg-gradient-to-b from-blue-600 via-blue-600 to-indigo-700 shadow-2xl transition-all duration-300 ease-in-out flex flex-col shrink-0 border-r border-blue-500/30`}>
 
                 <button
                     onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                    className="absolute -right-3.5 top-8 bg-white text-slate-800 rounded-full p-1.5 shadow-md hover:scale-110 hover:text-blue-600 transition-all border border-slate-100 z-50"
+                    className="hidden md:block absolute -right-3.5 top-8 bg-white text-slate-800 rounded-full p-1.5 shadow-md hover:scale-110 hover:text-blue-600 transition-all border border-slate-100 z-50"
                 >
                     <svg className={`w-3.5 h-3.5 transition-transform duration-300 ${!isSidebarOpen && 'rotate-180'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M15 19l-7-7 7-7" />
@@ -139,6 +138,16 @@ export default function DashboardAdmin() {
                     </div>
 
                     <div
+                        onClick={() => navigate('/profile')}
+                        className={`flex items-center cursor-pointer transition-all duration-300 group ${isSidebarOpen ? 'gap-3.5 px-4 py-3 rounded-xl' : 'justify-center w-12 h-12 rounded-xl mx-auto'} text-blue-100/80 hover:bg-white/10 hover:text-white`}
+                    >
+                        <svg className="w-5 h-5 shrink-0 group-hover:scale-105 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                        </svg>
+                        {isSidebarOpen && <span className="whitespace-nowrap text-[13px] tracking-wide uppercase font-bold">Profile</span>}
+                    </div>
+
+                    <div
                         onClick={() => { setActiveMenu('tambah-user'); navigate('/tambah-user'); }}
                         className={`flex items-center cursor-pointer transition-all duration-300 group ${isSidebarOpen ? 'gap-3.5 px-4 py-3 rounded-xl' : 'justify-center w-12 h-12 rounded-xl mx-auto'} ${activeMenu === 'tambah-user' ? 'bg-white/20 text-white border-l-[3.5px] border-white' : 'text-blue-100/80 hover:bg-white/10 hover:text-white'}`}
                     >
@@ -147,31 +156,39 @@ export default function DashboardAdmin() {
                         </svg>
                         {isSidebarOpen && <span className="whitespace-nowrap text-[13px] tracking-wide uppercase font-bold">Tambah User</span>}
                     </div>
-                </div>
-
-                <div className="px-3 pb-5">
+                    {/* Sign Out Button in Sidebar */}
                     <div
                         onClick={handleSignOut}
-                        className="bg-white/10 hover:bg-white/20 rounded-2xl p-3 flex items-center gap-3 border border-white/20 cursor-pointer transition-all group"
-                        title="Sign Out"
+                        className="mt-auto flex items-center gap-3.5 text-blue-100/80 px-4 py-3 rounded-xl font-semibold cursor-pointer transition-all hover:bg-red-500/20 hover:text-red-100 group"
                     >
-                        <div className="w-9 h-9 bg-white rounded-full flex items-center justify-center shrink-0 shadow-md">
-                            <span className="text-[#3B82F6] font-black text-sm">{currentUser.username?.charAt(0)?.toUpperCase()}</span>
-                        </div>
-                        {isSidebarOpen && (
-                            <div className="flex-1 min-w-0">
-                                <p className="text-white font-black text-xs truncate">{currentUser.username}</p>
-                                <p className="text-blue-200 text-[10px] font-bold mt-0.5">Admin — Klik untuk Keluar</p>
-                            </div>
-                        )}
+                        <svg className="w-5 h-5 shrink-0 group-hover:scale-105 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+                        <span className={`whitespace-nowrap text-[13px] tracking-wide transition-all duration-300 ${isSidebarOpen ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-4 hidden'}`}>SIGN OUT</span>
                     </div>
                 </div>
             </div>
 
-            {/* ============ KONTEN KANAN ============ */}
+            {/* ============ MAIN CONTENT ============ */}
             <div className="flex-1 flex flex-col h-screen overflow-hidden relative z-10">
-
                 <BlueWave />
+
+                {/* Navbar Mobile */}
+                <div className="md:hidden bg-white/80 backdrop-blur-md px-6 py-4 flex items-center justify-between shadow-sm z-30 border-b border-slate-100">
+                    <button onClick={() => setIsSidebarOpen(true)} className="p-2 -ml-2 text-slate-600">
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 6h16M4 12h16M4 18h16"/></svg>
+                    </button>
+                    <div className="flex items-center gap-3">
+                        <div className="text-right hidden sm:block">
+                            <p className="text-xs font-black uppercase tracking-widest text-[#3B82F6]">Welcome Back</p>
+                            <p className="text-sm font-extrabold text-slate-800">{currentUser.username}</p>
+                        </div>
+                        <div 
+                            onClick={() => navigate('/profile')}
+                            className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center p-0.5 shadow-inner cursor-pointer hover:scale-105 transition-transform"
+                        >
+                            <img src={users.find(u => u.name === currentUser.username)?.avatar || 'https://i.pravatar.cc/150?img=68'} alt="User" className="w-full h-full rounded-full object-cover" />
+                        </div>
+                    </div>
+                </div>
 
                 <div className="px-8 pt-6 pb-0 shrink-0 z-20">
                     <div className="bg-white/80 backdrop-blur-md rounded-[28px] border border-white/90 px-6 py-4 flex flex-wrap items-center justify-between gap-4 shadow-[0_8px_30px_rgba(59,130,246,0.06)]">
@@ -215,17 +232,16 @@ export default function DashboardAdmin() {
                             </button>
                         </div>
 
-                        <div
-                            className="flex items-center gap-3 bg-white hover:bg-blue-50 py-1.5 px-3.5 rounded-full border border-slate-200/80 cursor-pointer shadow-sm transition-all"
-                            onClick={handleSignOut}
-                            title="Sign Out"
-                        >
-                            <div className="text-right hidden sm:block">
-                                <p className="text-slate-800 font-black text-xs leading-none">{currentUser.username}</p>
-                                <p className="text-blue-500 font-bold text-[10px] mt-1 uppercase">Admin</p>
+                        <div className="hidden md:flex items-center gap-4 bg-white/60 backdrop-blur-sm px-4 py-2 rounded-2xl border border-slate-200/60 shadow-sm">
+                            <div className="text-right">
+                                <p className="text-[11px] font-black uppercase tracking-widest text-blue-600">Welcome Back</p>
+                                <p className="text-[14px] font-extrabold text-slate-800">{currentUser.username}</p>
                             </div>
-                            <div className="w-8 h-8 bg-gradient-to-br from-[#3B82F6] to-[#1E40AF] rounded-full flex items-center justify-center text-white text-xs font-bold shadow-inner">
-                                {currentUser.username?.charAt(0)?.toUpperCase()}
+                            <div 
+                                onClick={() => navigate('/profile')}
+                                className="w-12 h-12 rounded-full border-2 border-white shadow-md overflow-hidden bg-white cursor-pointer hover:scale-105 transition-transform"
+                            >
+                                <img src={users.find(u => u.name === currentUser.username)?.avatar || 'https://i.pravatar.cc/150?img=68'} alt="User" className="w-full h-full rounded-full object-cover" />
                             </div>
                         </div>
                     </div>

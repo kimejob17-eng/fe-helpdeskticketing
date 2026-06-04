@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import LogoImg from '../assets/logolandscape.png';
 import LoginAsset from '../assets/assetlogin.png';
 
@@ -76,12 +77,12 @@ export default function Login() {
         // Simpan sesi aktif
         localStorage.setItem('currentUser', JSON.stringify(sessionUser));
 
-        // Tampilkan popup sukses lalu navigasi
+        // Tampilkan popup sukses (Animasi 3D Logo) lalu navigasi
         setShowSuccessPopup(true);
         setTimeout(() => {
             setShowSuccessPopup(false);
             navigate(targetRoute);
-        }, 2200);
+        }, 2800);
     };
 
     // ================= ICON EYE (TOMBOL LIHAT PASSWORD) =================
@@ -150,20 +151,7 @@ export default function Login() {
 
                     <div className="w-full max-w-[435px] bg-white/75 backdrop-blur-2xl rounded-[32px] border border-white/80 shadow-[0_20px_50px_rgba(30,58,138,0.05)] px-8 py-8 md:px-10 md:py-10 relative">
 
-                        {/* ================= SUCCESS POP UP MODAL ================= */}
-                        {showSuccessPopup && (
-                            <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/90 backdrop-blur-md rounded-[32px] animate-scale-up">
-                                <div className="p-6 flex flex-col items-center w-[90%]">
-                                    <div className="w-16 h-16 bg-[#22c55e] rounded-full flex items-center justify-center mb-4 shadow-[0_8px_20px_rgba(34,197,94,0.3)]">
-                                        <svg className="w-8 h-8 text-white animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="4">
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                        </svg>
-                                    </div>
-                                    <h3 className="text-2xl font-bold text-slate-800 text-center tracking-tight">Login Berhasil</h3>
-                                    <p className="text-sm font-medium text-slate-500 text-center mt-2">Menghubungkan ke sistem dashboard...</p>
-                                </div>
-                            </div>
-                        )}
+                        {/* ================= SUCCESS POP UP (REMOVED DARI KARTU) ================= */}
 
                         {/* ================= ERROR POP UP ================= */}
                         {showErrorPopup && (
@@ -258,6 +246,55 @@ export default function Login() {
                     </div>
                 </div>
             </div>
+
+            {/* ================= FULLSCREEN 3D LOGO TRANSITION ================= */}
+            <AnimatePresence>
+                {showSuccessPopup && (
+                    <motion.div 
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.5 }}
+                        className="fixed inset-0 z-[999] flex flex-col items-center justify-center bg-white/95 backdrop-blur-xl"
+                    >
+                        <motion.div
+                            initial={{ scale: 0.5, rotateY: -90, opacity: 0 }}
+                            animate={{ 
+                                scale: [0.5, 1.2, 1], 
+                                rotateY: [-90, 0, 360, 360],
+                                opacity: [0, 1, 1, 1]
+                            }}
+                            transition={{ 
+                                duration: 2.2, 
+                                ease: "easeInOut",
+                                times: [0, 0.4, 0.8, 1]
+                            }}
+                            className="flex flex-col items-center"
+                        >
+                            <div className="relative">
+                                {/* Glow behind logo */}
+                                <div className="absolute inset-0 bg-blue-400 blur-[60px] opacity-20 rounded-full"></div>
+                                <img src={LogoImg} alt="Company Logo" className="w-[220px] md:w-[280px] object-contain relative z-10 drop-shadow-2xl" />
+                            </div>
+                            
+                            <motion.div 
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 1, duration: 0.5 }}
+                                className="mt-10 flex flex-col items-center"
+                            >
+                                <div className="flex gap-2 mb-3">
+                                    <motion.div animate={{ scale: [1, 1.5, 1], opacity: [0.5, 1, 0.5] }} transition={{ duration: 1, repeat: Infinity, delay: 0 }} className="w-2 h-2 rounded-full bg-blue-600"></motion.div>
+                                    <motion.div animate={{ scale: [1, 1.5, 1], opacity: [0.5, 1, 0.5] }} transition={{ duration: 1, repeat: Infinity, delay: 0.2 }} className="w-2 h-2 rounded-full bg-blue-500"></motion.div>
+                                    <motion.div animate={{ scale: [1, 1.5, 1], opacity: [0.5, 1, 0.5] }} transition={{ duration: 1, repeat: Infinity, delay: 0.4 }} className="w-2 h-2 rounded-full bg-blue-400"></motion.div>
+                                </div>
+                                <h3 className="text-[16px] font-bold text-blue-900 tracking-widest uppercase">Mengautentikasi...</h3>
+                            </motion.div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
         </div>
     );
 }

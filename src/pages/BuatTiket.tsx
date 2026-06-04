@@ -8,22 +8,42 @@ export default function BuatTiket() {
     const { getStaffs } = useUserContext();
     const activeStaffs = getStaffs().filter(s => s.status === 'Aktif');
 
+    // Filter staff yang sedang tidak punya tugas aktif
+    const existingTickets = JSON.parse(localStorage.getItem('ticketsData') || '[]');
+    const busyTechs = existingTickets
+        .filter((t: any) => t.status !== 'Completed')
+        .map((t: any) => (t.tech || '').toLowerCase());
+    
+    const availableStaffs = activeStaffs.filter(s => !busyTechs.includes(s.name.toLowerCase()));
+
+    const getInitialDateTime = () => {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        return `${year}-${month}-${day}T${hours}:${minutes}`;
+    };
+
     // ================= STATE FORM =================
     const [kodeMasalah, setKodeMasalah] = useState('');
     const [detailPesanan, setDetailPesanan] = useState('');
-    const [kategori, setKategori] = useState('MEDIUM');
     const [teknisi, setTeknisi] = useState('');
-    const [jatuhTempo, setJatuhTempo] = useState('');
+    const [waktuSaatIni] = useState(getInitialDateTime());
+    const [jatuhTempo, setJatuhTempo] = useState(getInitialDateTime());
 
     const [showSuccessPopup, setShowSuccessPopup] = useState(false);
-    const [nomorAntrean, setNomorAntrean] = useState(0);
+    const [noTaskPopup, setNoTaskPopup] = useState('');
 
     // Set teknisi awal secara otomatis jika data tersedia
     useEffect(() => {
-        if (activeStaffs.length > 0 && !teknisi) {
-            setTeknisi(activeStaffs[0].name);
+        if (availableStaffs.length > 0 && !teknisi) {
+            setTeknisi(availableStaffs[0].name);
+        } else if (availableStaffs.length > 0 && !availableStaffs.find(s => s.name === teknisi)) {
+            setTeknisi(availableStaffs[0].name);
         }
-    }, [activeStaffs, teknisi]);
+    }, [availableStaffs, teknisi]);
 
     // ================= HANDLER =================
     const handleSubmit = (e: React.FormEvent) => {
@@ -36,14 +56,19 @@ export default function BuatTiket() {
         const antrianMasuk = existingTickets.length + 1;
         const autoNoTask = String(antrianMasuk).padStart(3, '0');
         
-        setNomorAntrean(antrianMasuk);
+        setNoTaskPopup(autoNoTask);
 
-        // 2. Format tanggal ke DD/MM/YYYY
-        const [year, month, day] = jatuhTempo.split('-');
-        const formattedDate = `${day}/${month}/${year}`;
+        // 2. Format tanggal ke DD/MM/YYYY HH:mm
+        const [datePart, timePart] = jatuhTempo.split('T');
+        const [year, month, day] = datePart.split('-');
+        const formattedDate = `${day}/${month}/${year} ${timePart || '00:00'}`;
+
+        const [cDatePart, cTimePart] = waktuSaatIni.split('T');
+        const [cYear, cMonth, cDay] = cDatePart.split('-');
+        const formattedCreatedAt = `${cDay}/${cMonth}/${cYear} ${cTimePart || '00:00'}`;
 
         // 3. Tentukan Avatar Teknisi dari User Context
-        const selectedStaff = activeStaffs.find(s => s.name === teknisi);
+        const selectedStaff = availableStaffs.find(s => s.name === teknisi) || activeStaffs.find(s => s.name === teknisi);
         const avatarUrl = selectedStaff ? selectedStaff.avatar : 'https://i.pravatar.cc/150?img=15';
 
         // 4. Siapkan Objek Tiket Baru
@@ -51,9 +76,12 @@ export default function BuatTiket() {
             id: autoNoTask, // Nomor antrean masuk otomatis
             kodeMasalah: kodeMasalah,
             task: detailPesanan.split('\n')[0].substring(0, 30), // Ambil baris pertama sebagai judul task
-            status: 'On Checking', // Status awal tiket baru
-            priority: kategori,
+            status: 'Assigned', // Status awal tiket baru
+            priority: 'LOW',
             date: formattedDate,
+            createdAt: formattedCreatedAt,
+            assignedAt: new Date().toISOString(), // Untuk patokan SLA 1
+            pointsEarned: 0,
             tech: teknisi,
             avatar: avatarUrl,
             fullDetail: detailPesanan // Simpan detail utuh
@@ -73,12 +101,11 @@ export default function BuatTiket() {
     const handleClear = () => {
         setKodeMasalah('');
         setDetailPesanan('');
-        setJatuhTempo('');
-        setKategori('MEDIUM');
+        setJatuhTempo(getInitialDateTime());
     };
 
     return (
-        <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center py-10 px-4 font-sans relative overflow-hidden">
+        <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center p-4 font-sans relative overflow-hidden">
 
             {/* Ambient eye-comfort background glows */}
             <div className="absolute top-[-10%] right-[-10%] w-[50vw] h-[50vw] rounded-full bg-blue-400/10 blur-[130px] pointer-events-none z-0"></div>
@@ -102,8 +129,8 @@ export default function BuatTiket() {
 
                         <div className="mt-6 w-full bg-gradient-to-br from-blue-50 to-indigo-50/50 border border-blue-100/70 rounded-3xl p-5 flex flex-col items-center justify-center relative overflow-hidden shadow-inner">
                             <div className="absolute top-[-20%] right-[-20%] w-24 h-24 rounded-full bg-blue-300/10 blur-xl pointer-events-none"></div>
-                            <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest">Nomor Antrean Anda</p>
-                            <p className="text-6xl font-black text-blue-900 mt-2 font-mono tracking-tighter drop-shadow-sm">{nomorAntrean}</p>
+                            <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest">Nomor Task Anda</p>
+                            <p className="text-6xl font-black text-blue-900 mt-2 font-mono tracking-tighter drop-shadow-sm">{noTaskPopup}</p>
                         </div>
 
                         <div className="mt-8 flex items-center gap-2">
@@ -120,15 +147,15 @@ export default function BuatTiket() {
             )}
 
             {/* HEADER TABS - Premium Cheerful Blue Glassmorphic */}
-            <div className="w-full max-w-[1100px] bg-gradient-to-r from-blue-600 to-indigo-600 backdrop-blur-md rounded-[32px] px-8 py-3.5 flex items-center justify-between shadow-[0_15px_30px_rgba(59,130,246,0.3)] mb-8 z-10">
-                <div className="flex items-center gap-8 ml-2">
-                    <div className="bg-white/20 border border-white/30 px-6 py-2 rounded-full text-white font-extrabold text-[15px] shadow-sm">
+            <div className="w-full max-w-[1100px] bg-gradient-to-r from-blue-600 to-indigo-600 backdrop-blur-md rounded-[32px] px-6 md:px-8 py-4 flex flex-col md:flex-row items-center justify-between gap-4 shadow-[0_15px_30px_rgba(59,130,246,0.3)] mb-8 z-10">
+                <div className="flex flex-wrap items-center justify-center gap-4 md:gap-8 md:ml-2">
+                    <div className="bg-white/20 border border-white/30 px-6 py-2 rounded-full text-white font-extrabold text-[14px] md:text-[15px] shadow-sm">
                         <span className="tracking-wide">Buat Tiket</span>
                     </div>
-                    <button onClick={() => navigate('/ticket-detail')} className="text-blue-100 hover:text-white font-bold text-[15px] transition-all hover:scale-105 duration-200">Detail Tiket</button>
-                    <button onClick={() => navigate('/lihat-tiket')} className="text-blue-100 hover:text-white font-bold text-[15px] transition-all hover:scale-105 duration-200">Lihat Tiket</button>
+                    <button onClick={() => navigate('/ticket-detail')} className="text-blue-100 hover:text-white font-bold text-[14px] md:text-[15px] transition-all hover:scale-105 duration-200">Detail Tiket</button>
+                    <button onClick={() => navigate('/lihat-tiket')} className="text-blue-100 hover:text-white font-bold text-[14px] md:text-[15px] transition-all hover:scale-105 duration-200">Lihat Tiket</button>
                 </div>
-                <button onClick={() => navigate('/dashboard')} className="flex items-center gap-2 bg-white/10 hover:bg-white/20 border border-white/20 px-5 py-2 rounded-full text-white font-bold text-[12px] uppercase transition-all tracking-wider">
+                <button onClick={() => navigate('/dashboard')} className="flex items-center gap-2 bg-white/10 hover:bg-white/20 border border-white/20 px-5 py-2 rounded-full text-white font-bold text-[12px] uppercase transition-all tracking-wider shrink-0">
                     <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" /></svg>
                     Home
                 </button>
@@ -165,14 +192,19 @@ export default function BuatTiket() {
                         {/* Kode Tiket Masalah */}
                         <div>
                             <label className="block text-[11px] font-black text-slate-500 uppercase tracking-wider mb-2 ml-1">Kode Tiket Masalah <span className="text-rose-500">*</span></label>
-                            <input
-                                type="text"
-                                value={kodeMasalah}
-                                onChange={(e) => setKodeMasalah(e.target.value)}
-                                placeholder="Contoh: ERR-NET-01"
-                                required
-                                className="w-full bg-slate-50 border border-slate-200/80 rounded-xl px-4 py-3.5 text-slate-800 font-semibold text-[14px] outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 focus:bg-white transition-all shadow-sm"
-                            />
+                            <div className="relative">
+                                <select
+                                    value={kodeMasalah}
+                                    onChange={(e) => setKodeMasalah(e.target.value)}
+                                    required
+                                    className="w-full bg-slate-50 border border-slate-200/80 rounded-xl px-4 py-3.5 text-slate-800 font-semibold text-[14px] outline-none appearance-none cursor-pointer hover:bg-slate-100/60 focus:ring-2 focus:ring-blue-100 focus:border-blue-500 focus:bg-white transition-all shadow-sm"
+                                >
+                                    <option value="" disabled hidden>Pilih Kode Masalah...</option>
+                                    <option value="ERR-001 (Hardware)">ERR-001 (Hardware)</option>
+                                    <option value="ERR-002 (Software)">ERR-002 (Software)</option>
+                                </select>
+                                <svg className="w-4 h-4 text-slate-400 absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+                            </div>
                         </div>
 
                         {/* Detail Pesanan */}
@@ -190,19 +222,14 @@ export default function BuatTiket() {
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                             <div>
-                                <label className="block text-[11px] font-black text-slate-500 uppercase tracking-wider mb-2 ml-1">Kategori Pekerjaan</label>
-                                <div className="relative">
-                                    <select
-                                        value={kategori}
-                                        onChange={(e) => setKategori(e.target.value)}
-                                        className="w-full bg-slate-50 border border-slate-200/80 rounded-xl px-4 py-3.5 text-slate-700 font-bold text-[13px] outline-none appearance-none cursor-pointer hover:bg-slate-100/60 focus:ring-2 focus:ring-blue-100 focus:border-blue-500 focus:bg-white transition-all shadow-sm"
-                                    >
-                                        <option value="LOW">LOW</option>
-                                        <option value="MEDIUM">MEDIUM</option>
-                                        <option value="HIGH">HIGH</option>
-                                    </select>
-                                    <svg className="w-4 h-4 text-slate-400 absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
-                                </div>
+                                <label className="block text-[11px] font-black text-slate-500 uppercase tracking-wider mb-2 ml-1">Jatuh Tempo <span className="text-rose-500">*</span></label>
+                                <input
+                                    type="datetime-local"
+                                    value={jatuhTempo}
+                                    onChange={(e) => setJatuhTempo(e.target.value)}
+                                    required
+                                    className="w-full bg-slate-50 border border-slate-200/80 rounded-xl px-4 py-3.5 text-slate-700 font-bold text-[13px] outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 focus:bg-white transition-all shadow-sm cursor-pointer"
+                                />
                             </div>
 
                             <div>
@@ -216,10 +243,10 @@ export default function BuatTiket() {
                                         onChange={(e) => setTeknisi(e.target.value)}
                                         className="w-full bg-slate-50 border border-slate-200/80 rounded-xl pl-12 pr-10 py-3.5 text-slate-700 font-bold text-[13px] outline-none appearance-none cursor-pointer hover:bg-slate-100/60 focus:ring-2 focus:ring-blue-100 focus:border-blue-500 focus:bg-white transition-all shadow-sm"
                                     >
-                                        {activeStaffs.length === 0 ? (
-                                            <option value="">Belum ada teknisi aktif</option>
+                                        {availableStaffs.length === 0 ? (
+                                            <option value="">Semua teknisi sedang sibuk</option>
                                         ) : (
-                                            activeStaffs.map(staff => (
+                                            availableStaffs.map(staff => (
                                                 <option key={staff.id} value={staff.name}>{staff.name}</option>
                                             ))
                                         )}
@@ -229,16 +256,7 @@ export default function BuatTiket() {
                             </div>
                         </div>
 
-                        <div className="w-full sm:w-1/2 sm:pr-3">
-                            <label className="block text-[11px] font-black text-slate-500 uppercase tracking-wider mb-2 ml-1">Jatuh Tempo <span className="text-rose-500">*</span></label>
-                            <input
-                                type="date"
-                                value={jatuhTempo}
-                                onChange={(e) => setJatuhTempo(e.target.value)}
-                                required
-                                className="w-full bg-slate-50 border border-slate-200/80 rounded-xl px-4 py-3.5 text-slate-700 font-bold text-[13px] outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 focus:bg-white transition-all shadow-sm cursor-pointer"
-                            />
-                        </div>
+
 
                         <div>
                             <label className="block text-[11px] font-black text-slate-500 uppercase tracking-wider mb-2 ml-1">Dokumentasi Kendala (Opsional)</label>

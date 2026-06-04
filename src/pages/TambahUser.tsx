@@ -35,7 +35,6 @@ const BlueWave = () => (
 export default function TambahUser() {
     const navigate = useNavigate();
     const { addUser, getHeads, getStaffs } = useUserContext();
-    const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
     // Ambil data dari context
     const availableLeaders = getHeads();
@@ -51,7 +50,8 @@ export default function TambahUser() {
         joinDate: new Date().toISOString().split('T')[0], // YYYY-MM-DD format
     });
 
-    const [selectedLeaderId, setSelectedLeaderId] = useState<string>('');
+    const [selectedLeaderId, setSelectedLeaderId] = useState<string>('');    // State UI
+    const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth > 768);
     const [selectedStaffIds, setSelectedStaffIds] = useState<string[]>([]);
     const [showSuccessPopup, setShowSuccessPopup] = useState(false);
     const [newUserName, setNewUserName] = useState('');
@@ -127,12 +127,20 @@ export default function TambahUser() {
                 </div>
             )}
 
+            {/* ================= OVERLAY MOBILE ================= */}
+            {isSidebarOpen && (
+                <div 
+                    className="md:hidden fixed inset-0 bg-slate-900/50 z-40 backdrop-blur-sm"
+                    onClick={() => setIsSidebarOpen(false)}
+                ></div>
+            )}
+
             {/* ================= SIDEBAR ================= */}
-            <div className={`${isSidebarOpen ? 'w-64' : 'w-20'} bg-gradient-to-b from-[#3B82F6] via-[#2563EB] to-[#1E40AF] shadow-2xl transition-all duration-300 ease-in-out flex flex-col relative z-20 shrink-0 border-r border-blue-500/30`}>
+            <div className={`fixed md:relative z-50 h-full ${isSidebarOpen ? 'translate-x-0 w-64' : '-translate-x-full w-64 md:translate-x-0 md:w-20'} bg-gradient-to-b from-[#3B82F6] via-[#2563EB] to-[#1E40AF] shadow-2xl transition-all duration-300 ease-in-out flex flex-col shrink-0 border-r border-blue-500/30`}>
                 {/* Toggle button */}
                 <button
                     onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                    className="absolute -right-3.5 top-8 bg-white text-slate-800 rounded-full p-1.5 shadow-md hover:scale-110 hover:text-blue-600 transition-all z-30 border border-slate-100"
+                    className="hidden md:block absolute -right-3.5 top-8 bg-white text-slate-800 rounded-full p-1.5 shadow-md hover:scale-110 hover:text-blue-600 transition-all z-30 border border-slate-100"
                 >
                     <svg className={`w-3.5 h-3.5 transition-transform duration-300 ${!isSidebarOpen && 'rotate-180'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M15 19l-7-7 7-7" />
@@ -189,13 +197,29 @@ export default function TambahUser() {
             </div>
 
             {/* ================= KONTEN UTAMA ================= */}
-            <div className="flex-1 flex flex-col h-screen overflow-hidden relative">
+            <div className="flex-1 flex flex-col relative z-10 w-full overflow-hidden">
 
                 {/* Gelombang biru di bagian bawah */}
                 <BlueWave />
 
+                {/* Navbar Top Mobile (Meresponsive) */}
+                <div className="md:hidden bg-white/80 backdrop-blur-md px-6 py-4 flex items-center justify-between shadow-sm z-30 border-b border-slate-100">
+                    <button onClick={() => setIsSidebarOpen(true)} className="p-2 -ml-2 text-slate-600">
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 6h16M4 12h16M4 18h16"/></svg>
+                    </button>
+                    <div className="flex items-center gap-3">
+                        <div className="text-right hidden sm:block">
+                            <p className="text-xs font-black uppercase tracking-widest text-[#3B82F6]">Welcome Back</p>
+                            <p className="text-sm font-extrabold text-slate-800">{sessionUser.username}</p>
+                        </div>
+                        <div className="w-9 h-9 bg-white rounded-full flex items-center justify-center shrink-0 shadow-md">
+                            <span className="text-[#3B82F6] font-black text-sm">{sessionUser.username?.charAt(0)?.toUpperCase()}</span>
+                        </div>
+                    </div>
+                </div>
+
                 {/* Header Bar Biru (Konsisten seperti DetailTiket) */}
-                <div className="w-full px-6 pt-6 pb-2 z-10 shrink-0">
+                <div className="hidden md:block w-full px-6 pt-6 pb-2 z-10 shrink-0">
                     <div className="bg-[#3B82F6] rounded-[24px] px-8 py-3.5 flex items-center justify-between shadow-[0_10px_30px_rgba(59,130,246,0.35)]">
                         <div className="flex items-center gap-6">
                             <button
@@ -221,8 +245,9 @@ export default function TambahUser() {
                 </div>
 
                 {/* Konten Form Scroll */}
-                <div className="flex-1 overflow-y-auto px-6 py-4 z-10 relative">
-                    <div className="max-w-[860px] mx-auto">
+                <div className="flex-1 overflow-y-auto custom-scrollbar relative z-10 pb-8 px-4 sm:px-6 md:px-8 pt-4">
+                    <div className="max-w-[800px] mx-auto bg-white rounded-[36px] shadow-[0_20px_50px_rgba(15,23,42,0.06)] border border-slate-100 overflow-hidden">
+                        <div className="p-10">
 
                         {/* Judul Halaman */}
                         <div className="flex items-center gap-4 mb-6">
@@ -233,7 +258,7 @@ export default function TambahUser() {
                             </div>
                             <div>
                                 <h1 className="text-[26px] font-black text-[#1E3A8A] leading-tight">Registrasi Karyawan</h1>
-                                <p className="text-slate-400 font-bold text-[13px]">Isi data berikut untuk mendaftarkan karyawan baru. Email & password otomatis akan dikirim.</p>
+                                <p className="text-slate-400 font-bold text-[13px]">Isi data berikut untuk mendaftarkan karyawan baru.</p>
                             </div>
                         </div>
 
@@ -243,13 +268,12 @@ export default function TambahUser() {
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
                             <p className="text-[#1E40AF] font-bold text-[13px]">
-                                Password default: <span className="font-black bg-blue-100 px-2 py-0.5 rounded-lg">password123</span> — akan dikirim ke email karyawan secara otomatis.
+                                Password default: <span className="font-black bg-blue-100 px-2 py-0.5 rounded-lg">password123</span>
                             </p>
                         </div>
 
                         {/* Form Card */}
-                        <div className="bg-white rounded-[36px] shadow-[0_20px_60px_rgba(59,130,246,0.08)] border border-blue-100/80 p-10 mb-8">
-                            <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6">
+                        <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6">
 
                                 {/* ======== KOLOM KIRI: Data Karyawan ======== */}
                                 <div className="space-y-5">
@@ -335,10 +359,6 @@ export default function TambahUser() {
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 9l-7 7-7-7" />
                                             </svg>
                                         </div>
-                                        {/* Badge Role */}
-                                        <div className={`mt-2 inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${formData.role === 'Head IT' ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-600'}`}>
-                                            {formData.role}
-                                        </div>
                                     </div>
                                 </div>
 
@@ -351,9 +371,6 @@ export default function TambahUser() {
                                     {/* ==== KONDISI 1: Staff IT → Pilih Leader (Single Select) ==== */}
                                     {formData.role === 'Staff IT' && (
                                         <div className="space-y-4">
-                                            <p className="text-[12px] text-slate-400 font-bold">
-                                                Staff IT harus memiliki 1 Leader (Head IT) yang bertanggung jawab.
-                                            </p>
                                             <div>
                                                 <label className="block text-[11px] font-black text-[#1E40AF] mb-1.5 ml-1">Pilih Leader *</label>
                                                 <div className="relative">
@@ -372,41 +389,12 @@ export default function TambahUser() {
                                                     </svg>
                                                 </div>
                                             </div>
-
-                                            {/* Preview Leader yang dipilih */}
-                                            {selectedLeaderId && (() => {
-                                                const leader = availableLeaders.find(l => l.id === selectedLeaderId);
-                                                return leader ? (
-                                                    <div>
-                                                        <label className="block text-[11px] font-black text-[#1E40AF] mb-1.5 ml-1">Leader Terpilih</label>
-                                                        <div className="w-full bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-2xl px-4 py-3 flex items-center gap-3 shadow-sm">
-                                                            <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-white shadow-md shrink-0">
-                                                                <img src={leader.avatar} alt="Leader" className="w-full h-full object-cover" />
-                                                            </div>
-                                                            <div>
-                                                                <p className="font-black text-[#1E40AF] text-[14px]">{leader.name}</p>
-                                                                <p className="text-[10px] font-bold text-blue-400 uppercase tracking-wider">Head IT</p>
-                                                            </div>
-                                                            <div className="ml-auto">
-                                                                <div className="w-6 h-6 bg-[#22c55e] rounded-full flex items-center justify-center">
-                                                                    <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="3">
-                                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                                                    </svg>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                ) : null;
-                                            })()}
                                         </div>
                                     )}
 
                                     {/* ==== KONDISI 2: Head IT → Multi-Select Staff ==== */}
                                     {formData.role === 'Head IT' && (
                                         <div className="space-y-4">
-                                            <p className="text-[12px] text-slate-400 font-bold">
-                                                Head IT dapat mengelola beberapa Staff IT. Tambahkan satu per satu dari daftar.
-                                            </p>
                                             <div>
                                                 <label className="block text-[11px] font-black text-[#1E40AF] mb-1.5 ml-1">Tambah Staff</label>
                                                 <div className="relative">
@@ -429,42 +417,17 @@ export default function TambahUser() {
                                             </div>
 
                                             {/* Daftar Staff Terpilih */}
-                                            {selectedStaffIds.length > 0 ? (
-                                                <div>
-                                                    <label className="block text-[11px] font-black text-[#1E40AF] mb-1.5 ml-1">
-                                                        Staff Anggota ({selectedStaffIds.length})
-                                                    </label>
-                                                    <div className="bg-[#F8FAFF] border border-blue-100 rounded-2xl p-3 flex flex-col gap-2 max-h-[220px] overflow-y-auto">
-                                                        {selectedStaffIds.map((staffId, idx) => {
-                                                            const staff = availableStaffs.find(s => s.id === staffId);
-                                                            return staff ? (
-                                                                <div key={staffId} className="flex items-center gap-3 bg-white px-3 py-2 rounded-xl shadow-sm border border-slate-100 group">
-                                                                    <span className="text-[#3B82F6] font-black text-xs w-5 text-center">{idx + 1}</span>
-                                                                    <div className="w-8 h-8 rounded-full overflow-hidden border border-slate-100 shrink-0">
-                                                                        <img src={staff.avatar} alt={staff.name} className="w-full h-full object-cover" />
-                                                                    </div>
-                                                                    <span className="font-bold text-slate-700 text-[13px] flex-1 truncate">{staff.name}</span>
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => handleRemoveStaff(staffId)}
-                                                                        className="w-6 h-6 bg-red-100 text-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500 hover:text-white shrink-0"
-                                                                    >
-                                                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
-                                                                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                                                                        </svg>
-                                                                    </button>
-                                                                </div>
-                                                            ) : null;
-                                                        })}
-                                                    </div>
-                                                </div>
-                                            ) : (
-                                                <div className="bg-blue-50/50 border border-dashed border-blue-200 rounded-2xl p-6 flex flex-col items-center justify-center text-center">
-                                                    <svg className="w-8 h-8 text-blue-300 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                    </svg>
-                                                    <p className="text-slate-400 font-bold text-[12px]">Belum ada staff terpilih</p>
-                                                    <p className="text-slate-300 font-semibold text-[11px]">Pilih dari dropdown di atas</p>
+                                            {selectedStaffIds.length > 0 && (
+                                                <div className="bg-[#F8FAFF] border border-blue-100 rounded-2xl p-3 flex flex-wrap gap-2">
+                                                    {selectedStaffIds.map((staffId) => {
+                                                        const staff = availableStaffs.find(s => s.id === staffId);
+                                                        return staff ? (
+                                                            <div key={staffId} className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-slate-100 text-[12px] font-bold">
+                                                                {staff.name}
+                                                                <button type="button" onClick={() => handleRemoveStaff(staffId)} className="text-red-500 hover:text-red-700">✕</button>
+                                                            </div>
+                                                        ) : null;
+                                                    })}
                                                 </div>
                                             )}
                                         </div>

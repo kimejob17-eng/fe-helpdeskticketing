@@ -26,19 +26,24 @@ export default function Teknisi() {
 
     // Dapatkan daftar nama teknisi yang masih memiliki task aktif
     const busyTechNames = tickets
-        .filter(t => ['On Checking', 'In Progress', 'Reopen'].includes(t.status))
-        .map(t => t.tech);
+        .filter(t => t.status !== 'Completed')
+        .map(t => (t.tech || '').toLowerCase());
 
-    // Filter teknisi agar hanya menampilkan yang BELUM memiliki task
-    const teknisiList = allTeknisiList.filter(tech => !busyTechNames.includes(tech.name));
+    // Tampilkan semua teknisi
+    const teknisiList = allTeknisiList;
 
     // State Sidebar dan Pencarian
-    const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+    const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth > 768);
     const [searchTerm, setSearchTerm] = useState('');
 
     // Pagination State
     const [currentPage, setCurrentPage] = useState(1);
-    const itemsPerPage = 9;
+    
+    // Logika Items Per Page: 
+    // - Jika Desktop & Sidebar Tertutup: 6
+    // - Jika Desktop & Sidebar Terbuka ATAU Mobile: 4
+    const isDesktop = window.innerWidth > 1024;
+    const itemsPerPage = (isDesktop && !isSidebarOpen) ? 6 : 4;
 
     useEffect(() => {
         setCurrentPage(1);
@@ -59,13 +64,21 @@ export default function Teknisi() {
             <div className="absolute top-[-10%] right-[-10%] w-[50vw] h-[50vw] rounded-full bg-blue-100/20 blur-[130px] pointer-events-none z-0"></div>
             <div className="absolute bottom-[-10%] left-[-10%] w-[45vw] h-[45vw] rounded-full bg-indigo-100/10 blur-[100px] pointer-events-none z-0"></div>
 
+            {/* ================= OVERLAY MOBILE ================= */}
+            {isSidebarOpen && (
+                <div 
+                    className="md:hidden fixed inset-0 bg-slate-900/50 z-40 backdrop-blur-sm"
+                    onClick={() => setIsSidebarOpen(false)}
+                ></div>
+            )}
+
             {/* ================= SIDEBAR (Premium Cheerful Blue Style) ================= */}
-            <div className={`${isSidebarOpen ? 'w-64' : 'w-20'} bg-gradient-to-b from-blue-600 via-blue-600 to-indigo-700 shadow-2xl transition-all duration-300 ease-in-out flex flex-col relative z-20 shrink-0 border-r border-blue-500/30`}>
+            <div className={`fixed md:relative z-50 h-full ${isSidebarOpen ? 'translate-x-0 w-64' : '-translate-x-full w-64 md:translate-x-0 md:w-20'} bg-gradient-to-b from-blue-600 via-blue-600 to-indigo-700 shadow-2xl transition-all duration-300 ease-in-out flex flex-col shrink-0 border-r border-blue-500/30`}>
 
                 {/* Tombol Toggle Sidebar */}
                 <button
                     onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                    className="absolute -right-3.5 top-8 bg-white text-slate-800 rounded-full p-1.5 shadow-md hover:scale-110 hover:text-blue-600 transition-all z-30 border border-slate-100"
+                    className="hidden md:block absolute -right-3.5 top-8 bg-white text-slate-800 rounded-full p-1.5 shadow-md hover:scale-110 hover:text-blue-600 transition-all z-30 border border-slate-100"
                 >
                     <svg className={`w-3.5 h-3.5 transition-transform duration-300 ${!isSidebarOpen && 'rotate-180'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M15 19l-7-7 7-7" />
@@ -135,10 +148,26 @@ export default function Teknisi() {
             </div>
 
             {/* ================= KONTEN UTAMA KANAN ================= */}
-            <div className="flex-1 flex flex-col h-screen overflow-hidden relative z-10">
+            <div className="flex-1 flex flex-col relative z-10 w-full overflow-hidden">
+
+                {/* Navbar Top Mobile */}
+                <div className="md:hidden bg-white/80 backdrop-blur-md px-6 py-4 flex items-center justify-between shadow-sm z-30 border-b border-slate-100">
+                    <button onClick={() => setIsSidebarOpen(true)} className="p-2 -ml-2 text-slate-600">
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 6h16M4 12h16M4 18h16"/></svg>
+                    </button>
+                    <div className="flex items-center gap-3" onClick={() => navigate('/login')}>
+                        <div className="text-right hidden sm:block">
+                            <p className="text-xs font-black uppercase tracking-widest text-[#3B82F6]">Head IT</p>
+                            <p className="text-sm font-extrabold text-slate-800">{currentUser.username}</p>
+                        </div>
+                        <div className="w-9 h-9 bg-white rounded-full flex items-center justify-center shrink-0 shadow-md">
+                            <span className="text-[#3B82F6] font-black text-sm">{currentUser.username?.charAt(0)?.toUpperCase()}</span>
+                        </div>
+                    </div>
+                </div>
 
                 {/* --- HEADER BIRU (Persis Mockup) --- */}
-                <div className="w-full px-8 py-6 z-10 shrink-0">
+                <div className="hidden md:block w-full px-8 py-6 z-10 shrink-0">
                     <div className="bg-[#3B82F6] rounded-[24px] px-6 py-3.5 flex items-center justify-between shadow-[0_10px_30px_rgba(59,130,246,0.2)]">
 
                         {/* Search Bar */}
@@ -172,7 +201,7 @@ export default function Teknisi() {
                 </div>
 
                 {/* --- GRID TEKNISI --- */}
-                <div className="flex-1 overflow-y-auto px-8 pb-8 pt-12 custom-scrollbar">
+                <div className="flex-1 overflow-y-auto px-4 md:px-8 pb-8 pt-8 md:pt-12 custom-scrollbar">
                     {/* LOGIKA GRID:
                         - lg:grid-cols-2 (Saat Sidebar terbuka/layar medium)
                         - xl:grid-cols-3 (Saat Sidebar tertutup/layar lebar, akan jadi 3 kolom)
@@ -198,6 +227,21 @@ export default function Teknisi() {
                                     {/* Foto Profil Melayang */}
                                     <div className="absolute -top-12 left-1/2 -translate-x-1/2 w-24 h-24 rounded-full border-[5px] border-white shadow-[0_10px_25px_rgba(15,23,42,0.08)] overflow-hidden bg-slate-100 z-10 transition-transform duration-500 group-hover:scale-105 group-hover:border-blue-50/50">
                                         <img src={tech.avatar} alt={tech.name} className="w-full h-full object-cover" />
+                                    </div>
+                                    
+                                    {/* Label Status Penugasan */}
+                                    <div className="absolute top-4 right-4 z-20">
+                                        {busyTechNames.includes(tech.name.toLowerCase()) ? (
+                                            <span className="bg-rose-50 border border-rose-200 text-rose-600 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest shadow-sm flex items-center gap-1">
+                                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                                Dalam Penugasan
+                                            </span>
+                                        ) : (
+                                            <span className="bg-emerald-50 border border-emerald-200 text-emerald-600 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest shadow-sm flex items-center gap-1">
+                                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" /></svg>
+                                                Tersedia
+                                            </span>
+                                        )}
                                     </div>
 
                                     {/* Konten Kartu */}
@@ -252,7 +296,7 @@ export default function Teknisi() {
                     {/* --- PAGINATION --- */}
                     {totalPages > 1 && (
                         <div className="mt-16 flex justify-center pb-4">
-                            <div className="bg-slate-200/50 backdrop-blur-sm rounded-full flex items-center px-3 py-1.5 gap-2 shadow-inner border border-slate-200/40">
+                            <div className="bg-slate-200/50 backdrop-blur-sm rounded-full flex flex-wrap justify-center items-center px-3 py-1.5 gap-2 shadow-inner border border-slate-200/40">
                                 <button 
                                     onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                                     disabled={currentPage === 1}

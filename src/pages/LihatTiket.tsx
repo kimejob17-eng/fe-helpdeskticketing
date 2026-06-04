@@ -1,5 +1,6 @@
 import { useState, ChangeEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { calculateDynamicPriority, getPriorityBadgeStyle, getPriorityWeight } from '../utils/ticketUtils';
 
 
 export default function LihatTiket() {
@@ -12,7 +13,17 @@ export default function LihatTiket() {
         const savedTickets = localStorage.getItem('ticketsData');
         if (savedTickets) {
             try {
-                const parsed = JSON.parse(savedTickets);
+                let parsed = JSON.parse(savedTickets);
+                // MIGRATION: Update old statuses to match new flow
+                let migrated = false;
+                parsed = parsed.map((t: any) => {
+                    if (t.status === 'On Checking') { migrated = true; return { ...t, status: 'Assigned' }; }
+                    if (t.status === 'Recheck') { migrated = true; return { ...t, status: 'On Check' }; }
+                    return t;
+                });
+                if (migrated) {
+                    localStorage.setItem('ticketsData', JSON.stringify(parsed));
+                }
                 return parsed.sort((a: any, b: any) => Number(a.id) - Number(b.id));
             } catch (e) {
                 return [];
@@ -29,23 +40,8 @@ export default function LihatTiket() {
     const [endDate, setEndDate] = useState('');
 
     // ================= HANDLER UPDATE INLINE =================
-    const handleUpdateStatus = (ticketId: string, newStatus: string, e: ChangeEvent<HTMLSelectElement>) => {
-        e.stopPropagation();
-        setTickets(prev => {
-            const updated = prev.map(t => t.id === ticketId ? { ...t, status: newStatus } : t);
-            localStorage.setItem('ticketsData', JSON.stringify(updated));
-            return updated;
-        });
-    };
-
-    const handleUpdatePriority = (ticketId: string, newPriority: string, e: ChangeEvent<HTMLSelectElement>) => {
-        e.stopPropagation();
-        setTickets(prev => {
-            const updated = prev.map(t => t.id === ticketId ? { ...t, priority: newPriority } : t);
-            localStorage.setItem('ticketsData', JSON.stringify(updated));
-            return updated;
-        });
-    };
+    // Dropdown dihilangkan untuk memastikan semua logika poin (SLA) 
+    // dieksekusi secara benar di dalam DetailTiket.tsx
 
     // ================= LOGIKA FILTER TANGGAL TIMESTAMPS =================
     const getTicketTime = (dateString: string) => {
@@ -60,9 +56,10 @@ export default function LihatTiket() {
         return new Date(Number(year), Number(month) - 1, Number(day), hour, min, 59).getTime();
     };
 
-    const filteredTickets = tickets.filter((ticket) => {
+    const filteredTickets = tickets.filter(ticket => {
         const matchTech = filterTech.trim().length < 3 || ticket.tech.toLowerCase().includes(filterTech.trim().toLowerCase());
-        const matchPriority = filterPriority === 'All' || (ticket.priority && ticket.priority.toUpperCase() === filterPriority.toUpperCase());
+        const dynamicPriority = calculateDynamicPriority(ticket.date, ticket.status, ticket.completedAt, ticket.reopenCount > 0);
+        const matchPriority = filterPriority === 'All' || (dynamicPriority.toUpperCase() === filterPriority.toUpperCase());
         const matchStatus = filterStatus === 'All' || ticket.status === filterStatus;
 
         let matchDate = true;
@@ -78,28 +75,17 @@ export default function LihatTiket() {
             }
         }
         return matchTech && matchPriority && matchStatus && matchDate;
-    });
+    }).sort((a, b) => getPriorityWeight(calculateDynamicPriority(b.date, b.status, b.completedAt, b.reopenCount > 0), b.status) - getPriorityWeight(calculateDynamicPriority(a.date, a.status, a.completedAt, a.reopenCount > 0), a.status));
 
     // ================= STYLE HANDLERS =================
     const getStatusStyle = (status: string) => {
         switch (status) {
             case 'Completed': return 'bg-emerald-50 text-[#22c55e] border-emerald-200';
             case 'Reopen': return 'bg-amber-50 text-[#f59e0b] border-amber-200';
-            case 'Reopen': return 'bg-amber-50 text-[#f59e0b] border-amber-200';
             case 'In Progress': return 'bg-blue-50 text-[#3b82f6] border-blue-200';
-            case 'Recheck': return 'bg-purple-50 text-purple-600 border-purple-200';
-            case 'On Checking': return 'bg-rose-50 text-[#ef4444] border-rose-200';
+            case 'Assigned': return 'bg-rose-50 text-[#ef4444] border-rose-200';
+            case 'On Check': return 'bg-purple-50 text-purple-600 border-purple-200';
             default: return 'bg-slate-50 text-slate-600 border-slate-200';
-        }
-    };
-
-    const getPriorityStyle = (priority: string) => {
-        if (!priority) return 'bg-slate-200 text-slate-600 border-transparent';
-        switch (priority.toUpperCase()) {
-            case 'LOW': return 'bg-[#22c55e] text-white border-transparent';
-            case 'MEDIUM': return 'bg-[#f59e0b] text-white border-transparent';
-            case 'HIGH': return 'bg-[#ef4444] text-white border-transparent';
-            default: return 'bg-slate-200 text-slate-600 border-transparent';
         }
     };
 
@@ -108,15 +94,15 @@ export default function LihatTiket() {
 
             {/* ================= BLUE HEADER BLOCK (Tabs & Stats) ================= */}
             <div className="w-full max-w-[1100px] bg-[#3B82F6] rounded-[32px] shadow-[0_15px_30px_rgba(59,130,246,0.3)] flex flex-col px-8 py-5 mb-6 z-10">
-                <div className="flex items-center justify-between border-b border-blue-400/50 pb-5 mb-5">
-                    <div className="flex items-center gap-8 ml-2">
-                        <button onClick={() => navigate('/buat-tiket')} className="text-white hover:text-blue-200 font-bold text-[15px] transition-colors">Buat Tiket</button>
-                        <button onClick={() => navigate('/ticket-detail')} className="text-white hover:text-blue-200 font-bold text-[15px] transition-colors">Detail Tiket</button>
+                <div className="flex flex-col md:flex-row items-center justify-between border-b border-blue-400/50 pb-5 mb-5 gap-4">
+                    <div className="flex flex-wrap items-center justify-center gap-4 md:gap-8 md:ml-2">
+                        <button onClick={() => navigate('/buat-tiket')} className="text-white hover:text-blue-200 font-bold text-[14px] md:text-[15px] transition-colors">Buat Tiket</button>
+                        <button onClick={() => navigate('/ticket-detail')} className="text-white hover:text-blue-200 font-bold text-[14px] md:text-[15px] transition-colors">Detail Tiket</button>
                         <div className="bg-white px-6 py-1.5 rounded-full shadow-sm">
-                            <span className="text-[#1E40AF] font-black text-[15px] tracking-wide">Lihat Tiket</span>
+                            <span className="text-[#1E40AF] font-black text-[14px] md:text-[15px] tracking-wide">Lihat Tiket</span>
                         </div>
                     </div>
-                    <button onClick={() => navigate('/dashboard')} className="flex items-center gap-2 bg-blue-800/40 hover:bg-blue-800/80 px-4 py-1.5 rounded-full transition-colors border-2 border-blue-900/50">
+                    <button onClick={() => navigate('/dashboard')} className="flex items-center gap-2 bg-blue-800/40 hover:bg-blue-800/80 px-4 py-1.5 rounded-full transition-colors border-2 border-blue-900/50 shrink-0">
                         <div className="bg-white rounded-full p-0.5">
                             <svg className="w-3.5 h-3.5 text-blue-900" fill="currentColor" viewBox="0 0 24 24"><path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" /></svg>
                         </div>
@@ -124,26 +110,26 @@ export default function LihatTiket() {
                     </button>
                 </div>
 
-                <div className="flex items-center justify-between gap-3">
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
                     {[
-                        { label: 'Waiting', count: tickets.filter(t => t.status === 'On Checking').length || 1, icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' },
+                        { label: 'Waiting', count: tickets.filter(t => t.status === 'Assigned').length || 1, icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' },
                         { label: 'Reopen', count: tickets.filter(t => t.status === 'Reopen').length, icon: 'M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15' },
                         { label: 'In Progress', count: tickets.filter(t => t.status === 'In Progress').length, icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z' },
                         { label: 'Complete', count: tickets.filter(t => t.status === 'Completed').length, icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4' },
                         { label: 'Total Tasks', count: tickets.length, icon: 'M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10' }
                     ].map((stat, idx) => (
-                        <div key={idx} className="flex-1 bg-white rounded-full py-2 px-4 flex items-center gap-3 shadow-md">
-                            <div className="bg-slate-100 p-1.5 rounded-full">
-                                <svg className="w-5 h-5 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d={stat.icon} /></svg>
+                        <div key={idx} className="bg-white rounded-2xl py-2 px-3 flex items-center gap-2 shadow-md">
+                            <div className="bg-slate-100 p-1.5 rounded-full shrink-0">
+                                <svg className="w-4 h-4 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d={stat.icon} /></svg>
                             </div>
-                            <div className="flex flex-col">
-                                <span className="text-[10px] font-extrabold text-blue-900 leading-none">{stat.label}</span>
-                                <span className="text-[16px] font-black text-slate-800 leading-tight">{stat.count}</span>
+                            <div className="flex flex-col overflow-hidden">
+                                <span className="text-[10px] font-extrabold text-blue-900 leading-none truncate">{stat.label}</span>
+                                <span className="text-[14px] md:text-[16px] font-black text-slate-800 leading-tight">{stat.count}</span>
                             </div>
                         </div>
                     ))}
-                    <button className="flex items-center gap-2 bg-white hover:bg-slate-50 px-5 py-2.5 rounded-full shadow-md border border-slate-100">
-                        <svg className="w-5 h-5 text-red-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" /></svg>
+                    <button className="flex items-center justify-center gap-2 bg-white hover:bg-slate-50 px-3 py-2.5 rounded-2xl shadow-md border border-slate-100 col-span-2 md:col-span-1">
+                        <svg className="w-5 h-5 text-red-500 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" /></svg>
                         <span className="text-[12px] font-black text-slate-700 uppercase tracking-widest">PDF</span>
                     </button>
                 </div>
@@ -167,10 +153,10 @@ export default function LihatTiket() {
                 </div>
 
                 {/* --- COLLAPSIBLE FILTER PANEL --- */}
-                <div className={`transition-all duration-300 ease-in-out overflow-hidden bg-white shadow-xl border border-slate-100 rounded-[28px]
-                    ${isFilterOpen ? 'max-h-[200px] p-6 opacity-100 mb-2' : 'max-h-0 p-0 opacity-0 border-transparent'}`}>
+                <div className={`transition-all duration-500 ease-in-out overflow-hidden bg-white shadow-xl border border-slate-100 rounded-[28px]
+                    ${isFilterOpen ? 'max-h-[500px] p-6 opacity-100 mb-2' : 'max-h-0 p-0 opacity-0 border-transparent'}`}>
 
-                    <div className="grid grid-cols-5 gap-4 w-full">
+                    <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 w-full">
                         <div className="flex flex-col">
                             <label className="text-[11px] font-black text-slate-400 uppercase tracking-wider mb-1.5 ml-1">Nama Teknisi</label>
                             <div className="bg-slate-50 rounded-full border border-slate-200 px-4 py-2 flex items-center relative focus-within:border-blue-400">
@@ -199,7 +185,7 @@ export default function LihatTiket() {
                             <label className="text-[11px] font-black text-slate-400 uppercase tracking-wider mb-1.5 ml-1">Status</label>
                             <div className="bg-slate-50 rounded-full border border-slate-200 px-4 py-2 flex items-center relative focus-within:border-blue-400">
                                 <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="w-full bg-transparent text-sm font-bold text-slate-700 outline-none appearance-none cursor-pointer z-10">
-                                    <option value="All">All Status</option><option value="Completed">Completed</option><option value="In Progress">In Progress</option><option value="Recheck">Recheck</option><option value="Reopen">Reopen</option><option value="On Checking">On Checking</option>
+                                    <option value="All">All Status</option><option value="Assigned">Assigned</option><option value="Completed">Completed</option><option value="In Progress">In Progress</option><option value="Reopen">Reopen</option><option value="On Check">On Check</option>
                                 </select>
                                 <svg className="w-4 h-4 text-slate-400 absolute right-4 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 9l-7 7-7-7" /></svg>
                             </div>
@@ -218,20 +204,21 @@ export default function LihatTiket() {
                 </div>
 
                 {/* ================= CARD UTAMA TABEL DATA ================= */}
-                <div className="w-full bg-white rounded-[40px] shadow-2xl p-8 pb-4 border border-slate-100 min-h-[460px]">
-                    <div className="w-full">
+                <div className="w-full bg-white rounded-[40px] shadow-2xl p-4 md:p-8 pb-4 border border-slate-100 min-h-[460px] overflow-hidden">
+                    <div className="w-full overflow-x-auto custom-scrollbar pb-4">
+                        <div className="min-w-[900px]">
 
-                        {/* Header Judul Kolom */}
-                        <div className="grid grid-cols-5 gap-4 px-6 py-4 text-[#1E40AF] font-black text-[16px] border-b-[3px] border-slate-200 mb-2">
-                            <div>Tasks</div>
-                            <div>Status (Update)</div>
-                            <div>Priority (Update)</div>
-                            <div>Date</div>
-                            <div>Teknisi</div>
-                        </div>
+                            {/* Header Judul Kolom */}
+                            <div className="grid grid-cols-5 gap-4 px-6 py-4 text-[#1E40AF] font-black text-[16px] border-b-[3px] border-slate-200 mb-2">
+                                <div>Tasks</div>
+                                <div>Status (Update)</div>
+                                <div>Priority (Update)</div>
+                                <div>Date</div>
+                                <div>Teknisi</div>
+                            </div>
 
-                        {/* Konten Iterasi Baris Tiket */}
-                        <div className="flex flex-col gap-2">
+                            {/* Konten Iterasi Baris Tiket */}
+                            <div className="flex flex-col gap-2">
                             {filteredTickets.length > 0 ? (
                                 filteredTickets.map((t, index) => (
                                     <div
@@ -249,37 +236,17 @@ export default function LihatTiket() {
                                             </p>
                                         </div>
 
-                                        {/* Kolom Dropdown Status */}
-                                        <div onClick={(e) => e.stopPropagation()}>
-                                            <div className={`inline-flex items-center rounded-full px-3 py-1.5 border text-[13px] font-black shadow-sm relative ${getStatusStyle(t.status)}`}>
-                                                <select
-                                                    value={t.status}
-                                                    onChange={(e) => handleUpdateStatus(t.id, e.target.value, e)}
-                                                    className="bg-transparent border-none outline-none appearance-none pr-5 cursor-pointer font-black text-current"
-                                                >
-                                                    <option value="Completed" className="text-slate-800 bg-white">Completed</option>
-                                                    <option value="In Progress" className="text-slate-800 bg-white">In Progress</option>
-                                                    <option value="Recheck" className="text-slate-800 bg-white">Recheck</option>
-                                                    <option value="Reopen" className="text-slate-800 bg-white">Reopen</option>
-                                                    <option value="On Checking" className="text-slate-800 bg-white">On Checking</option>
-                                                </select>
-                                                <svg className="w-3 h-3 absolute right-3 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 9l-7 7-7-7" /></svg>
+                                        {/* Kolom Status (ReadOnly) */}
+                                        <div>
+                                            <div className={`inline-flex items-center rounded-full px-4 py-1.5 border text-[13px] font-black shadow-sm ${getStatusStyle(t.status)}`}>
+                                                {t.status}
                                             </div>
                                         </div>
 
-                                        {/* Kolom Dropdown Priority */}
+                                        {/* Kolom Badge Priority */}
                                         <div onClick={(e) => e.stopPropagation()}>
-                                            <div className={`inline-flex items-center rounded-full px-4 py-1.5 border text-[11px] font-black tracking-widest shadow-sm relative ${getPriorityStyle(t.priority)}`}>
-                                                <select
-                                                    value={t.priority.toUpperCase()}
-                                                    onChange={(e) => handleUpdatePriority(t.id, e.target.value, e)}
-                                                    className="bg-transparent border-none outline-none appearance-none pr-5 cursor-pointer font-black uppercase text-white"
-                                                >
-                                                    <option value="LOW" className="text-slate-800 bg-white font-black">LOW</option>
-                                                    <option value="MEDIUM" className="text-slate-800 bg-white font-black">MEDIUM</option>
-                                                    <option value="HIGH" className="text-slate-800 bg-white font-black">HIGH</option>
-                                                </select>
-                                                <svg className="w-3 h-3 absolute right-3 pointer-events-none text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 9l-7 7-7-7" /></svg>
+                                            <div className={`inline-flex items-center rounded-full px-4 py-1.5 border text-[11px] font-black tracking-widest shadow-sm relative ${getPriorityBadgeStyle(calculateDynamicPriority(t.date, t.status, t.completedAt, t.reopenCount > 0), t.status)}`}>
+                                                {calculateDynamicPriority(t.date, t.status, t.completedAt, t.reopenCount > 0)}
                                             </div>
                                         </div>
 
@@ -307,6 +274,7 @@ export default function LihatTiket() {
                     </div>
                 </div>
             </div>
+        </div>
         </div>
     );
 }

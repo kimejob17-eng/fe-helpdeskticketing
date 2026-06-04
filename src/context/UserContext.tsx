@@ -9,7 +9,7 @@ export interface User {
     username: string;
     email: string;
     phone: string;
-    role: 'Head IT' | 'Staff IT';
+    role: 'Head IT' | 'Staff IT' | 'ADMIN';
     staffIds: string[];
     leaderId: string | null;
     joinDate: string;
@@ -17,17 +17,19 @@ export interface User {
     status: 'Aktif' | 'Non Aktif';
     avatar: string;
     password: string;
+    points: number;
 }
 
 interface UserContextType {
     users: User[];
-    addUser: (userData: Omit<User, 'id' | 'status' | 'avatar' | 'password' | 'inactiveDate'>) => void;
+    addUser: (userData: Omit<User, 'id' | 'status' | 'avatar' | 'password' | 'inactiveDate' | 'points'>) => void;
     updateUserStatus: (userId: string | number, newStatus: 'Aktif' | 'Non Aktif') => void;
     updateUser: (userId: string | number, updatedData: Partial<User>) => void;
     removeUser: (userId: string | number) => void;
     getUserById: (userId: string | number) => User | undefined;
     getHeads: () => User[];
     getStaffs: () => User[];
+    updateUserPoints: (userId: string | number, delta: number) => void;
 }
 
 // ============================================================
@@ -80,7 +82,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     }, [users]);
 
     // Tambah user baru
-    const addUser = (userData: Omit<User, 'id' | 'status' | 'avatar' | 'password' | 'inactiveDate'>) => {
+    const addUser = (userData: Omit<User, 'id' | 'status' | 'avatar' | 'password' | 'inactiveDate' | 'points'>) => {
         const newId = `u${Date.now()}`;
         const defaultPassword = 'password123';
         const avatarNum = Math.floor(Math.random() * 70) + 1;
@@ -104,6 +106,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
             status: 'Aktif',
             avatar: `https://i.pravatar.cc/150?img=${avatarNum}`,
             password: defaultPassword,
+            points: 0,
         };
 
         setUsers(prev => {
@@ -246,12 +249,23 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         });
     };
 
+    const updateUserPoints = (userId: string | number, delta: number) => {
+        setUsers(prev => prev.map(u => {
+            if (String(u.id) === String(userId)) {
+                // Jangan biarkan poin di bawah 0 jika tidak diinginkan, tapi dalam sistem sanksi poin bisa minus.
+                // Disini kita membolehkan poin negatif.
+                return { ...u, points: (u.points || 0) + delta };
+            }
+            return u;
+        }));
+    };
+
     const getUserById = (userId: string | number) => users.find(u => String(u.id) === String(userId));
     const getHeads = () => users.filter(u => u.role === 'Head IT');
     const getStaffs = () => users.filter(u => u.role === 'Staff IT');
 
     return (
-        <UserContext.Provider value={{ users, addUser, updateUserStatus, updateUser, removeUser, getUserById, getHeads, getStaffs }}>
+        <UserContext.Provider value={{ users, addUser, updateUserStatus, updateUser, removeUser, getUserById, getHeads, getStaffs, updateUserPoints }}>
             {children}
         </UserContext.Provider>
     );
