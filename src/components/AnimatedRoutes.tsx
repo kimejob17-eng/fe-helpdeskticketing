@@ -14,6 +14,7 @@ import TambahUser from '../pages/TambahUser';
 import Profile from '../pages/Profile';
 import PageTransition from './PageTransition';
 import SetPassword from "../pages/SetPassword";
+import PrivateRoute from './PrivateRoute';
 
 export default function AnimatedRoutes() {
     const location = useLocation();
@@ -21,24 +22,68 @@ export default function AnimatedRoutes() {
     return (
         <AnimatePresence mode="wait">
             <Routes location={location} key={location.pathname}>
+                {/* Public routes */}
                 <Route path="/" element={<PageTransition><LandingPage /></PageTransition>} />
-                
                 <Route path="/login" element={<PageTransition><Login /></PageTransition>} />
                 <Route path="/register" element={<Navigate to="/login" replace />} />
-
-                <Route path="/dashboard" element={<PageTransition><DashboardHead /></PageTransition>} />
-                <Route path="/dashboard-admin" element={<PageTransition><DashboardAdmin /></PageTransition>} />
-                <Route path="/dashboard-staff" element={<PageTransition><DashboardStaff /></PageTransition>} />
-
-                <Route path="/buat-tiket" element={<PageTransition><BuatTiket /></PageTransition>} />
-                <Route path="/teknisi" element={<PageTransition><Teknisi /></PageTransition>} />
-                <Route path="/lihat-tiket" element={<PageTransition><LihatTiket /></PageTransition>} />
-                <Route path="/ticket-detail" element={<PageTransition><DetailTiket /></PageTransition>} />
-
-                <Route path="/tambah-user" element={<PageTransition><TambahUser /></PageTransition>} />
-                <Route path="/profile" element={<PageTransition><Profile /></PageTransition>} />
                 <Route path="/set-password" element={<SetPassword />} />
+
+                {/* Protected: HEAD_IT only */}
+                <Route path="/dashboard" element={
+                    <PrivateRoute allowedRoles={['HEAD_IT']}>
+                        <PageTransition><DashboardHead /></PageTransition>
+                    </PrivateRoute>
+                } />
+
+                {/* Protected: ADMIN only */}
+                <Route path="/dashboard-admin" element={
+                    <PrivateRoute allowedRoles={['ADMINISTRATOR']}>
+                        <PageTransition><DashboardAdmin /></PageTransition>
+                    </PrivateRoute>
+                } />
+
+                {/* Protected: STAFF_IT_LEADER only */}
+                <Route path="/dashboard-staff" element={
+                    <PrivateRoute allowedRoles={['STAFF_IT_LEADER']}>
+                        <PageTransition><DashboardStaff /></PageTransition>
+                    </PrivateRoute>
+                } />
+
+                {/* Protected: HEAD_IT & ADMIN */}
+                <Route path="/buat-tiket" element={
+                    <PrivateRoute allowedRoles={['HEAD_IT', 'ADMIN']}>
+                        <PageTransition><BuatTiket /></PageTransition>
+                    </PrivateRoute>
+                } />
+                <Route path="/teknisi" element={
+                    <PrivateRoute allowedRoles={['HEAD_IT', 'ADMIN']}>
+                        <PageTransition><Teknisi /></PageTransition>
+                    </PrivateRoute>
+                } />
+                <Route path="/lihat-tiket" element={
+                    <PrivateRoute allowedRoles={['HEAD_IT', 'ADMIN']}>
+                        <PageTransition><LihatTiket /></PageTransition>
+                    </PrivateRoute>
+                } />
+                <Route path="/tambah-user" element={
+                    <PrivateRoute allowedRoles={['ADMIN']}>
+                        <PageTransition><TambahUser /></PageTransition>
+                    </PrivateRoute>
+                } />
+
+                {/* Protected: all authenticated roles */}
+                <Route path="/ticket-detail" element={
+                    <PrivateRoute>
+                        <PageTransition><DetailTiket /></PageTransition>
+                    </PrivateRoute>
+                } />
+                <Route path="/profile" element={
+                    <PrivateRoute>
+                        <PageTransition><Profile /></PageTransition>
+                    </PrivateRoute>
+                } />
             </Routes>
         </AnimatePresence>
     );
+
 }

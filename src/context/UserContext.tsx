@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext, useEffect, ReactNode } from 'react';
+import React, { createContext, useState, useContext, useEffect, type ReactNode } from 'react';
 
 // ============================================================
 // TIPE DATA
@@ -51,7 +51,7 @@ function sendWelcomeEmail(email: string, username: string, password: string) {
     console.groupEnd();
 }
 
-const STORAGE_KEY = 'itticketing_users';
+/*const STORAGE_KEY = 'itticketing_users';
 function loadUsersFromStorage(): User[] {
     try {
         const raw = localStorage.getItem(STORAGE_KEY);
@@ -66,7 +66,7 @@ function loadUsersFromStorage(): User[] {
         localStorage.removeItem(STORAGE_KEY); // Hapus data yang rusak
     }
     return [];
-}
+}*/
 
 // ============================================================
 // CONTEXT
@@ -74,12 +74,12 @@ function loadUsersFromStorage(): User[] {
 const UserContext = createContext<UserContextType | null>(null);
 
 export const UserProvider = ({ children }: { children: ReactNode }) => {
-    const [users, setUsers] = useState<User[]>(loadUsersFromStorage);
+    const [users, setUsers] = useState<User[]>([]);
 
     // Sync ke localStorage setiap kali users berubah
-    useEffect(() => {
+    /*useEffect(() => {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(users));
-    }, [users]);
+    }, [users]);*/
 
     // Tambah user baru
     const addUser = (userData: Omit<User, 'id' | 'status' | 'avatar' | 'password' | 'inactiveDate' | 'points'>) => {

@@ -27,28 +27,33 @@ export default function Login() {
 
     try {
       // 1. Tembak API Backend lewat Kurir
-      const userData = await authApi.login({
+      const response = await authApi.login({
         userName: username,
         password: password,
       });
+
+      // Response structure: response.data contains the actual payload
+      const userData = response.data;
 
       // 2. Simpan data user asli dari BE ke localStorage
       localStorage.setItem(
         "currentUser",
         JSON.stringify({
           id: userData.id,
-          username: userData.employeeName,
-          userName: userData.userName,
+          username: userData.nama, // Di frontend, "username" digunakan untuk display nama
+          userName: userData.username,
           email: userData.email,
-          role: userData.roleName, // "ADMINISTRATOR", "LEAD", "EMPLOYEE"
+          role: userData.role?.roleName, // "ADMINISTRATOR", "LEAD", "EMPLOYEE"
+          token: userData.token, // Menyimpan token JWT
         }),
       );
 
       // 3. Tentukan redirect berdasarkan role dari BE
       let targetRoute = "/dashboard-staff"; // default EMPLOYEE
-      if (userData.roleName === "ADMINISTRATOR") {
+      const roleName = userData.role?.roleName;
+      if (roleName === "ADMINISTRATOR") {
         targetRoute = "/dashboard-admin";
-      } else if (userData.roleName === "LEAD") {
+      } else if (roleName === "LEAD") {
         targetRoute = "/dashboard";
       }
 
