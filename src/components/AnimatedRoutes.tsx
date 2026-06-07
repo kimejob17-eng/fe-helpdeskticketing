@@ -28,9 +28,9 @@ export default function AnimatedRoutes() {
                 <Route path="/register" element={<Navigate to="/login" replace />} />
                 <Route path="/set-password" element={<SetPassword />} />
 
-                {/* Protected: HEAD_IT only */}
+                {/* Protected: LEAD only */}
                 <Route path="/dashboard" element={
-                    <PrivateRoute allowedRoles={['HEAD_IT']}>
+                    <PrivateRoute allowedRoles={['LEAD']}>
                         <PageTransition><DashboardHead /></PageTransition>
                     </PrivateRoute>
                 } />
@@ -49,24 +49,24 @@ export default function AnimatedRoutes() {
                     </PrivateRoute>
                 } />
 
-                {/* Protected: HEAD_IT & ADMIN */}
+                {/* Protected: LEAD & ADMINISTRATOR */}
                 <Route path="/buat-tiket" element={
-                    <PrivateRoute allowedRoles={['HEAD_IT', 'ADMIN']}>
+                    <PrivateRoute allowedRoles={['LEAD', 'ADMINISTRATOR']}>
                         <PageTransition><BuatTiket /></PageTransition>
                     </PrivateRoute>
                 } />
                 <Route path="/teknisi" element={
-                    <PrivateRoute allowedRoles={['HEAD_IT', 'ADMIN']}>
+                    <PrivateRoute allowedRoles={['LEAD', 'ADMINISTRATOR']}>
                         <PageTransition><Teknisi /></PageTransition>
                     </PrivateRoute>
                 } />
                 <Route path="/lihat-tiket" element={
-                    <PrivateRoute allowedRoles={['HEAD_IT', 'ADMIN']}>
+                    <PrivateRoute allowedRoles={['LEAD', 'ADMINISTRATOR']}>
                         <PageTransition><LihatTiket /></PageTransition>
                     </PrivateRoute>
                 } />
                 <Route path="/tambah-user" element={
-                    <PrivateRoute allowedRoles={['ADMIN']}>
+                    <PrivateRoute allowedRoles={['ADMINISTRATOR']}>
                         <PageTransition><TambahUser /></PageTransition>
                     </PrivateRoute>
                 } />
