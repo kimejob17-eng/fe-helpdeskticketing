@@ -13,6 +13,7 @@ import LihatTiket from '../pages/LihatTiket';
 import TambahUser from '../pages/TambahUser';
 import Profile from '../pages/Profile';
 import PageTransition from './PageTransition';
+import SetPassword from "../pages/SetPassword";
 
 export default function AnimatedRoutes() {
     const location = useLocation();
@@ -36,6 +37,7 @@ export default function AnimatedRoutes() {
 
                 <Route path="/tambah-user" element={<PageTransition><TambahUser /></PageTransition>} />
                 <Route path="/profile" element={<PageTransition><Profile /></PageTransition>} />
+                <Route path="/set-password" element={<SetPassword />} />
             </Routes>
         </AnimatePresence>
     );
