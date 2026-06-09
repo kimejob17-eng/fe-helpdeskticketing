@@ -14,7 +14,10 @@ import TambahUser from '../pages/TambahUser';
 import Profile from '../pages/Profile';
 import PageTransition from './PageTransition';
 import SetPassword from "../pages/SetPassword";
+
+// Route Guards
 import PrivateRoute from './PrivateRoute';
+import PublicRoute from './PublicRoute'; // Imported the clean, matching PublicRoute
 
 export default function AnimatedRoutes() {
     const location = useLocation();
@@ -24,7 +27,14 @@ export default function AnimatedRoutes() {
             <Routes location={location} key={location.pathname}>
                 {/* Public routes */}
                 <Route path="/" element={<PageTransition><LandingPage /></PageTransition>} />
-                <Route path="/login" element={<PageTransition><Login /></PageTransition>} />
+                
+                {/* Protected from logged-in users: redirects active sessions back to their dashboard */}
+                <Route path="/login" element={
+                    <PublicRoute>
+                        <PageTransition><Login /></PageTransition>
+                    </PublicRoute>
+                } />
+                
                 <Route path="/register" element={<Navigate to="/login" replace />} />
                 <Route path="/set-password" element={<SetPassword />} />
 
@@ -85,5 +95,4 @@ export default function AnimatedRoutes() {
             </Routes>
         </AnimatePresence>
     );
-
 }
