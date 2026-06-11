@@ -165,6 +165,17 @@ export default function Profile() {
                             </h3>
                             
                             <form onSubmit={handlePasswordChange} className="space-y-4">
+                                <div>
+                                    <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Password Lama</label>
+                                    <input 
+                                        type="password" 
+                                        value={oldPassword}
+                                        onChange={(e) => setOldPassword(e.target.value)}
+                                        required
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-700 font-bold text-[14px] outline-none focus:bg-white focus:ring-2 focus:ring-blue-400 focus:border-transparent transition-all"
+                                        placeholder="••••••••"
+                                    />
+                                </div>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     <div>
                                         <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Password Baru</label>
