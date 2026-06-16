@@ -40,4 +40,14 @@ export const authApi = {
     const response = await axiosClient.post("/api/auth/set-password", data);
     return response.data;
   },
+
+  // 5. CHANGE PASSWORD (Ganti Password sendiri)
+  changePassword: async (data: {
+    oldPassword: string;
+    newPassword: string;
+    confirmPassword: string;
+  }) => {
+    const response = await axiosClient.patch("/api/employee/change-password", data);
+    return response.data;
+  },
 };
