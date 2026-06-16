@@ -27,10 +27,9 @@ const BlueWave = () => (
 // ============================================================
 export default function TambahUser() {
   const navigate = useNavigate();
-  const { addUser, getHeads, getStaffs } = useUserContext();
+  const { getStaffs } = useUserContext();
 
   // Ambil data dari context
-  const availableLeaders = getHeads();
   const availableStaffs = getStaffs();
 
   // ===== STATE FORM =====
@@ -134,6 +133,13 @@ export default function TambahUser() {
     const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
     if (!emailRegex.test(formData.email)) {
       setErrorMessage("Alamat email tidak valid. Pastikan format domain komplit (misal: .com, bukan .c).");
+      setShowErrorPopup(true);
+      return;
+    }
+
+    // Validasi Leader jika role Staff IT
+    if (formData.role === "Staff IT" && !selectedLeaderId) {
+      setErrorMessage("Silakan pilih Leader terlebih dahulu.");
       setShowErrorPopup(true);
       return;
     }
@@ -558,7 +564,7 @@ export default function TambahUser() {
                 <div className="space-y-5">
                   <h3 className="text-[12px] font-black text-[#3B82F6] uppercase tracking-widest border-b border-blue-100 pb-2">
                     {formData.role === "Staff IT"
-                      ? "Pilih Leader"
+                      ? "Pilih Leader *"
                       : "Pilih Staff Anggota"}
                   </h3>
 
@@ -569,6 +575,7 @@ export default function TambahUser() {
                         value={selectedLeaderId}
                         onChange={(e) => setSelectedLeaderId(e.target.value)}
                         disabled={leadsLoading}
+                        required={formData.role === "Staff IT"}
                         className="w-full bg-[#F8FAFF] border border-slate-200 rounded-2xl px-5 py-3 text-slate-700 font-bold text-[14px] outline-none appearance-none cursor-pointer focus:border-[#3B82F6] focus:bg-white focus:ring-2 focus:ring-blue-100 transition-all disabled:opacity-60 disabled:cursor-wait"
                       >
                         <option value="">

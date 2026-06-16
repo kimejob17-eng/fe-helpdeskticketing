@@ -90,22 +90,46 @@ export default function Profile() {
     const [oldPassword, setOldPassword] = useState('');
     const [newPassword, setNewPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
+    const [error, setError] = useState('');
+    const [success, setSuccess] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const handlePasswordChange = (e: React.FormEvent) => {
+    const handlePasswordChange = async (e: React.FormEvent) => {
         e.preventDefault();
+        setError('');
+        setSuccess('');
         
         if (newPassword !== confirmPassword) {
-            alert('Konfirmasi password tidak cocok dengan password baru!');
+            setError('Konfirmasi password tidak cocok dengan password baru!');
             return;
         }
 
-        // Simulasi update password (di aplikasi nyata, panggil API update)
-        alert('Password berhasil diperbarui!');
-        
-        // Reset form
-        setOldPassword('');
-        setNewPassword('');
-        setConfirmPassword('');
+        const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[A-Za-z\d@$!%*?&._\-]{8,128}$/;
+        if (!passwordRegex.test(newPassword)) {
+            setError('Password baru minimal 8 karakter dan harus mengandung setidaknya 1 huruf besar, 1 huruf kecil, dan 1 angka.');
+            return;
+        }
+
+        setIsSubmitting(true);
+        try {
+            await authApi.changePassword({
+                oldPassword,
+                newPassword,
+                confirmPassword,
+            });
+            setSuccess('Password berhasil diperbarui!');
+            
+            // Reset form
+            setOldPassword('');
+            setNewPassword('');
+            setConfirmPassword('');
+        } catch (err: any) {
+            console.error('Gagal memperbarui password:', err);
+            const backendMessage = err.response?.data?.message || err.response?.data || 'Gagal memperbarui password!';
+            setError(backendMessage);
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     if (!user) {
@@ -218,8 +242,23 @@ export default function Profile() {
                                 <svg className="w-5 h-5 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
                                 Pengaturan Keamanan
                             </h3>
-                            
-                            <form onSubmit={handlePasswordChange} className="space-y-4">
+                                                     <form onSubmit={handlePasswordChange} className="space-y-4">
+                                {error && (
+                                    <div className="p-4 bg-rose-50 text-rose-600 text-sm font-bold rounded-2xl border border-rose-100 flex items-center gap-2 animate-fade-in">
+                                        <svg className="w-5 h-5 text-rose-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                        <span>{error}</span>
+                                    </div>
+                                )}
+                                {success && (
+                                    <div className="p-4 bg-emerald-50 text-emerald-600 text-sm font-bold rounded-2xl border border-emerald-100 flex items-center gap-2 animate-fade-in">
+                                        <svg className="w-5 h-5 text-emerald-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
+                                        </svg>
+                                        <span>{success}</span>
+                                    </div>
+                                )}
                                 <div>
                                     <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Password Lama</label>
                                     <input 
@@ -227,7 +266,8 @@ export default function Profile() {
                                         value={oldPassword}
                                         onChange={(e) => setOldPassword(e.target.value)}
                                         required
-                                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-700 font-bold text-[14px] outline-none focus:bg-white focus:ring-2 focus:ring-blue-400 focus:border-transparent transition-all"
+                                        disabled={isSubmitting}
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-700 font-bold text-[14px] outline-none focus:bg-white focus:ring-2 focus:ring-blue-400 focus:border-transparent transition-all disabled:opacity-60"
                                         placeholder="••••••••"
                                     />
                                 </div>
@@ -239,7 +279,8 @@ export default function Profile() {
                                             value={newPassword}
                                             onChange={(e) => setNewPassword(e.target.value)}
                                             required
-                                            className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-700 font-bold text-[14px] outline-none focus:bg-white focus:ring-2 focus:ring-blue-400 focus:border-transparent transition-all"
+                                            disabled={isSubmitting}
+                                            className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-700 font-bold text-[14px] outline-none focus:bg-white focus:ring-2 focus:ring-blue-400 focus:border-transparent transition-all disabled:opacity-60"
                                             placeholder="••••••••"
                                         />
                                     </div>
@@ -250,7 +291,8 @@ export default function Profile() {
                                             value={confirmPassword}
                                             onChange={(e) => setConfirmPassword(e.target.value)}
                                             required
-                                            className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-700 font-bold text-[14px] outline-none focus:bg-white focus:ring-2 focus:ring-blue-400 focus:border-transparent transition-all"
+                                            disabled={isSubmitting}
+                                            className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-700 font-bold text-[14px] outline-none focus:bg-white focus:ring-2 focus:ring-blue-400 focus:border-transparent transition-all disabled:opacity-60"
                                             placeholder="••••••••"
                                         />
                                     </div>
@@ -259,10 +301,27 @@ export default function Profile() {
                                 <div className="pt-2">
                                     <button 
                                         type="submit" 
-                                        className="w-full sm:w-auto px-8 py-3.5 bg-[#22c55e] hover:bg-[#16a34a] text-white font-black rounded-full shadow-[0_8px_20px_rgba(34,197,94,0.3)] transition-all active:scale-95 flex items-center justify-center gap-2"
+                                        disabled={isSubmitting}
+                                        className={`w-full sm:w-auto px-8 py-3.5 text-white font-black rounded-full transition-all active:scale-95 flex items-center justify-center gap-2 ${
+                                            isSubmitting 
+                                            ? 'bg-emerald-400 cursor-not-allowed' 
+                                            : 'bg-[#22c55e] hover:bg-[#16a34a] shadow-[0_8px_20px_rgba(34,197,94,0.3)]'
+                                        }`}
                                     >
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" /></svg>
-                                        Simpan Password Baru
+                                        {isSubmitting ? (
+                                            <>
+                                                <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                </svg>
+                                                Memproses...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" /></svg>
+                                                Simpan Password Baru
+                                            </>
+                                        )}
                                     </button>
                                 </div>
                             </form>
