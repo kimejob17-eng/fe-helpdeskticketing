@@ -26,6 +26,12 @@ const normalizeRoleName = (roleName?: string): User['roleName'] => {
     return 'Staff IT';
 };
 
+const toBackendRoleName = (roleName: User['roleName']): 'ADMINISTRATOR' | 'LEAD' | 'EMPLOYEE' => {
+    if (roleName === 'Head IT') return 'LEAD';
+    if (roleName === 'ADMIN') return 'ADMINISTRATOR';
+    return 'EMPLOYEE';
+};
+
 const normalizeStatus = (accountStatus?: string, updatedAt?: string): User['status'] => {
     if (accountStatus?.toUpperCase() === 'INACTIVE' || updatedAt) return 'Non Aktif';
     return 'Aktif';
@@ -74,7 +80,7 @@ const BlueWave = () => (
 
 export default function DashboardAdmin() {
     const navigate = useNavigate();
-    const { users: contextUsers, updateUserStatus, removeUser, updateUser, getHeads, getStaffs } = useUserContext();
+    const { users: contextUsers, removeUser, updateUser } = useUserContext();
     const contextUsersRef = useRef(contextUsers);
 
     // ================= STATE =================
@@ -88,19 +94,22 @@ export default function DashboardAdmin() {
     const [selectedUser, setSelectedUser] = useState<(User & { leaderName?: string }) | null>(null);
     const [deleteConfirmUser, setDeleteConfirmUser] = useState<(User & { leaderName?: string }) | null>(null);
     const [alertMessage, setAlertMessage] = useState<string | null>(null);
-    
+    const [resetPasswordUserId, setResetPasswordUserId] = useState<string | null>(null);
+    const [disableUserId, setDisableUserId] = useState<string | null>(null);
+    const [isSavingEdit, setIsSavingEdit] = useState(false);
+
     // Pagination State
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 9;
-    
+
     // Edit State
     const [editUser, setEditUser] = useState<User | null>(null);
-    const [editFormData, setEditFormData] = useState<{name: string, username: string, email: string, phone: string, leaderId?: string | null, staffIds?: string[]}>({ name: '', username: '', email: '', phone: '', leaderId: null, staffIds: [] });
+    const [editFormData, setEditFormData] = useState<{ name: string, username: string, email: string, phone: string, roleName: User['roleName'], leaderId?: string | null, staffIds?: string[] }>({ name: '', username: '', email: '', phone: '', roleName: 'Staff IT', leaderId: null, staffIds: [] });
 
     // Session dari localStorage
     const sessionRaw = localStorage.getItem('currentUser');
     const currentUser = sessionRaw ? JSON.parse(sessionRaw) : { id: 'admin', username: 'Admin Master', roleName: 'ADMINISTRATOR' };
-    
+
     // ================= FUNGSI =================
     useEffect(() => {
         const loadEmployees = async () => {
@@ -109,8 +118,23 @@ export default function DashboardAdmin() {
 
             try {
                 const response = await authApi.getEmployees();
-                const employeeList = Array.isArray(response) ? response : response?.data ?? [];
-                setUsers(employeeList.map(mapEmployeeToUser));
+                const employeeList: BackendEmployee[] = Array.isArray(response) ? response : response?.data ?? [];
+                
+                let mappedUsers = employeeList.map(mapEmployeeToUser);
+                // Rekonstruksi staffIds untuk Head IT berdasarkan leaderId dari Staff IT
+                mappedUsers = mappedUsers.map(user => {
+                    if (user.roleName === 'Head IT') {
+                        return {
+                            ...user,
+                            staffIds: mappedUsers
+                                .filter(u => u.roleName === 'Staff IT' && String(u.leaderId) === String(user.id))
+                                .map(u => String(u.id))
+                        };
+                    }
+                    return user;
+                });
+                
+                setUsers(mappedUsers);
             } catch (error) {
                 console.error('[getEmployees] error:', error);
                 setEmployeeLoadError('Gagal memuat data karyawan dari backend.');
@@ -129,18 +153,13 @@ export default function DashboardAdmin() {
             username: user.username,
             email: user.email,
             phone: user.phone,
+            roleName: user.roleName,
             leaderId: user.leaderId || null,
             staffIds: user.staffIds || []
         });
         setEditUser(user);
     };
 
-    const handleUpdateUserStatus = (user: User) => {
-        const newStatus = user.status === 'Aktif' ? 'Non Aktif' : 'Aktif';
-        updateUserStatus(user.id, newStatus);
-        setUsers(prev => prev.map(item => String(item.id) === String(user.id) ? { ...item, status: newStatus } : item));
-        setSelectedUser(prev => prev && String(prev.id) === String(user.id) ? { ...prev, status: newStatus } : prev);
-    };
 
     const handleRemoveUser = (user: User) => {
         removeUser(user.id);
@@ -148,11 +167,143 @@ export default function DashboardAdmin() {
         setDeleteConfirmUser(null);
     };
 
-    const handleSaveEdit = (e: React.FormEvent) => {
+    const getApiErrorMessage = (error: unknown, fallback: string) => {
+        if (typeof error === 'object' && error !== null && 'response' in error) {
+            const response = (error as { response?: { data?: { message?: string } } }).response;
+            return response?.data?.message || fallback;
+        }
+        return fallback;
+    };
+
+    const handleResetPassword = async (user: User) => {
+        if (String(user.id) === String(currentUser.id)) {
+            setAlertMessage('Keamanan Terjaga: Anda tidak diperbolehkan mereset password akun Admin Anda sendiri!');
+            return;
+        }
+
+        setResetPasswordUserId(String(user.id));
+
+        try {
+            const response = await authApi.resetPassword({ employeeId: String(user.id) });
+            setAlertMessage(response?.message || `Password ${user.name} berhasil direset. Magic link sudah dikirim ke email karyawan.`);
+        } catch (error) {
+            console.error('[resetPassword] error:', error);
+            setAlertMessage(getApiErrorMessage(error, 'Gagal mereset password. Silakan coba lagi.'));
+        } finally {
+            setResetPasswordUserId(null);
+        }
+    };
+
+    const handleDisableUser = async (user: User & { leaderName?: string }) => {
+        if (String(user.id) === String(currentUser.id)) {
+            setAlertMessage('Keamanan Terjaga: Anda tidak diperbolehkan menonaktifkan akun Admin Anda sendiri!');
+            return;
+        }
+
+        if (user.status === 'Non Aktif') {
+            setAlertMessage('Akun ini sudah dalam kondisi Non Aktif.');
+            return;
+        }
+
+        setDisableUserId(String(user.id));
+
+        try {
+            const response = await authApi.disableUser({ employeeId: String(user.id) });
+            const inactiveDate = new Date().toISOString();
+            const disabledUser = {
+                ...user,
+                status: 'Non Aktif' as const,
+                inactiveDate,
+                leaderId: null,
+                leaderName: undefined,
+                staffIds: [],
+            };
+
+            setUsers(prev => prev.map(item => {
+                if (String(item.id) === String(user.id)) {
+                    return disabledUser;
+                }
+                if (String(item.leaderId) === String(user.id)) {
+                    return { ...item, leaderId: null, leaderName: undefined };
+                }
+                if (item.staffIds?.includes(String(user.id))) {
+                    return { ...item, staffIds: item.staffIds.filter(id => id !== String(user.id)) };
+                }
+                return item;
+            }));
+            setSelectedUser(prev => prev && String(prev.id) === String(user.id) ? disabledUser : prev);
+            setAlertMessage(response?.message || `${user.name} berhasil dinonaktifkan.`);
+        } catch (error) {
+            console.error('[disableUser] error:', error);
+            setAlertMessage(getApiErrorMessage(error, 'Gagal menonaktifkan akun. Silakan coba lagi.'));
+        } finally {
+            setDisableUserId(null);
+            setTimeout(() => {
+                window.location.reload();
+            }, 2000);
+        }
+    };
+
+    const handleSaveEdit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!editUser) return;
-        updateUser(editUser.id, editFormData);
-        setEditUser(null);
+
+        setIsSavingEdit(true);
+
+        try {
+            const selectedStaffIds = (editFormData.staffIds || []).filter(id => String(id) !== String(editUser.id));
+            const response = await authApi.editEmployee({
+                employeeId: String(editUser.id),
+                employeeName: editFormData.name,
+                email: editFormData.email,
+                noHp: editFormData.phone,
+                roleName: toBackendRoleName(editFormData.roleName),
+                leadID: editFormData.roleName === 'Staff IT' ? editFormData.leaderId || '' : '',
+                staffIds: editFormData.roleName === 'Head IT' ? selectedStaffIds : [],
+            });
+
+            const updatedUser = {
+                ...editUser,
+                ...editFormData,
+                roleDesc: editFormData.roleName,
+                leaderId: editFormData.roleName === 'Staff IT' ? editFormData.leaderId || null : null,
+                leaderName: editFormData.roleName === 'Staff IT'
+                    ? users.find(u => String(u.id) === String(editFormData.leaderId))?.name
+                    : undefined,
+                staffIds: editFormData.roleName === 'Head IT' ? selectedStaffIds : [],
+            };
+
+            updateUser(editUser.id, updatedUser);
+            setUsers(prev => prev.map(user => {
+                if (String(user.id) === String(editUser.id)) {
+                    return updatedUser;
+                }
+
+                if (editUser.roleName === 'Head IT' && editFormData.roleName !== 'Head IT' && String(user.leaderId) === String(editUser.id)) {
+                    return { ...user, leaderId: null, leaderName: undefined };
+                }
+
+                if (editFormData.roleName === 'Head IT') {
+                    const isSelectedStaff = selectedStaffIds.includes(String(user.id));
+                    if (isSelectedStaff) {
+                        return { ...user, leaderId: String(editUser.id), leaderName: editFormData.name };
+                    }
+                    if (String(user.leaderId) === String(editUser.id)) {
+                        return { ...user, leaderId: null, leaderName: undefined };
+                    }
+                }
+
+                return user;
+            }));
+            setSelectedUser(prev => prev && String(prev.id) === String(editUser.id) ? updatedUser : prev);
+            setEditUser(null);
+            setAlertMessage(response?.message || `${editFormData.name} berhasil diperbarui.`);
+        } catch (error) {
+            console.error('[editEmployee] error:', error);
+            setAlertMessage(getApiErrorMessage(error, 'Gagal memperbarui data karyawan. Silakan coba lagi.'));
+        } finally {
+            setIsSavingEdit(false);
+        }
     };
 
     const handleSignOut = () => {
@@ -184,7 +335,7 @@ export default function DashboardAdmin() {
 
             {/* ============ OVERLAY MOBILE ============ */}
             {isSidebarOpen && (
-                <div 
+                <div
                     className="md:hidden fixed inset-0 bg-slate-900/50 z-40 backdrop-blur-sm"
                     onClick={() => setIsSidebarOpen(false)}
                 ></div>
@@ -260,18 +411,19 @@ export default function DashboardAdmin() {
                 {/* Navbar Mobile */}
                 <div className="md:hidden bg-white/80 backdrop-blur-md px-6 py-4 flex items-center justify-between shadow-sm z-30 border-b border-slate-100">
                     <button onClick={() => setIsSidebarOpen(true)} className="p-2 -ml-2 text-slate-600">
-                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 6h16M4 12h16M4 18h16"/></svg>
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 6h16M4 12h16M4 18h16" /></svg>
                     </button>
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 bg-white hover:bg-blue-50/50 py-1.5 px-3 rounded-full border border-slate-200/80 cursor-pointer shadow-sm hover:shadow transition-all duration-300" onClick={() => navigate('/profile')}>
                         <div className="text-right hidden sm:block">
-                            <p className="text-xs font-black uppercase tracking-widest text-[#3B82F6]">Welcome Back</p>
-                            <p className="text-sm font-extrabold text-slate-800">{currentUser.username}</p>
+                            <p className="text-slate-500 font-bold text-xs leading-none">
+                                {currentUser?.userName || currentUser?.username}
+                            </p>
+                            <p className="text-blue-500 text-[10px] font-bold mt-1 leading-none">
+                                {currentUser?.roleName || "Administrator"}
+                            </p>
                         </div>
-                        <div 
-                            onClick={() => navigate('/profile')}
-                            className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center p-0.5 shadow-inner cursor-pointer hover:scale-105 transition-transform"
-                        >
-                            <img src={users.find(u => u.name === currentUser.username)?.avatar || 'https://i.pravatar.cc/150?img=68'} alt="User" className="w-full h-full rounded-full object-cover" />
+                        <div className="w-8 h-8 bg-blue-600/90 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-inner">
+                            {(currentUser?.employeeName || currentUser?.name || currentUser?.userName || currentUser?.username || "U").charAt(0).toUpperCase()}
                         </div>
                     </div>
                 </div>
@@ -324,16 +476,17 @@ export default function DashboardAdmin() {
                             </button> */}
                         </div>
 
-                        <div className="hidden md:flex items-center gap-4 bg-white/60 backdrop-blur-sm px-4 py-2 rounded-2xl border border-slate-200/60 shadow-sm">
-                            <div className="text-right">
-                                <p className="text-[11px] font-black uppercase tracking-widest text-blue-600">Welcome Back</p>
-                                <p className="text-[14px] font-extrabold text-slate-800">{currentUser.username}</p>
+                        <div className="flex items-center gap-3 bg-white hover:bg-blue-50/50 py-1.5 px-3 rounded-full border border-slate-200/80 cursor-pointer shadow-sm hover:shadow transition-all duration-300" onClick={() => navigate('/profile')}>
+                            <div className="text-right hidden sm:block">
+                                <p className="text-slate-500 font-bold text-xs leading-none">
+                                    {currentUser?.userName || currentUser?.username}
+                                </p>
+                                <p className="text-blue-500 text-[10px] font-bold mt-1 leading-none">
+                                    {currentUser?.roleName || "Administrator"}
+                                </p>
                             </div>
-                            <div 
-                                onClick={() => navigate('/profile')}
-                                className="w-12 h-12 rounded-full border-2 border-white shadow-md overflow-hidden bg-white cursor-pointer hover:scale-105 transition-transform"
-                            >
-                                <img src={users.find(u => u.name === currentUser.username)?.avatar || 'https://i.pravatar.cc/150?img=68'} alt="User" className="w-full h-full rounded-full object-cover" />
+                            <div className="w-8 h-8 bg-blue-600/90 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-inner">
+                                {(currentUser?.employeeName || currentUser?.name || currentUser?.userName || currentUser?.username || "U").charAt(0).toUpperCase()}
                             </div>
                         </div>
                     </div>
@@ -361,7 +514,7 @@ export default function DashboardAdmin() {
                     </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto px-8 pt-4 pb-8 relative z-10">
+                <div className="flex-1 overflow-y-auto px-8 pt-4 pb-8 relative z-10 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                     {employeeLoadError && (
                         <div className="mb-4 bg-amber-50 border border-amber-200 text-amber-700 rounded-2xl px-5 py-3 text-sm font-bold">
                             {employeeLoadError}
@@ -388,8 +541,10 @@ export default function DashboardAdmin() {
                                     className="bg-white/90 backdrop-blur-sm rounded-[28px] p-6 flex flex-col items-center text-center shadow-[0_8px_30px_rgba(59,130,246,0.04)] border border-slate-100/80 hover:border-blue-100 hover:shadow-[0_15px_40px_rgba(59,130,246,0.08)] hover:-translate-y-1 transition-all duration-300 relative z-10"
                                 >
                                     <div className="relative inline-block">
-                                        <div className="w-20 h-20 rounded-full shadow-sm overflow-hidden bg-white border-[3px] border-white ring-2 ring-slate-100">
-                                            <img src={user.avatar} alt={user.name} className={`w-full h-full object-cover transition-all ${user.status === 'Non Aktif' ? 'grayscale opacity-70' : ''}`} />
+                                        <div className="w-20 h-20 rounded-full shadow-sm overflow-hidden bg-blue-100 border-[3px] border-white ring-2 ring-slate-100 flex items-center justify-center text-3xl font-black text-blue-600">
+                                            <span className={`${user.status === 'Non Aktif' ? 'grayscale opacity-70' : ''}`}>
+                                                {(user.name && user.name !== '-') ? user.name.charAt(0).toUpperCase() : (user.username && user.username !== '-' ? user.username.charAt(0).toUpperCase() : '?')}
+                                            </span>
                                         </div>
                                         <div className={`absolute bottom-0.5 right-0.5 w-5 h-5 rounded-full border-2 border-white shadow-sm z-10 ${user.status === 'Aktif' ? 'bg-[#22c55e]' : 'bg-rose-500'}`} />
                                     </div>
@@ -411,10 +566,20 @@ export default function DashboardAdmin() {
                                                 <p className="text-[9px] font-black text-rose-400 uppercase tracking-widest">Diberhentikan</p>
                                                 <p className="text-[11px] font-bold text-rose-600">{user.inactiveDate || user.joinDate}</p>
                                             </div>
-                                        ) : user.roleName === 'Staff IT' && (
+                                        ) : user.roleName === 'Staff IT' ? (
                                             <div className="flex justify-between items-center border-t border-slate-200/50 pt-2">
                                                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Leader</p>
                                                 <p className="text-[11px] font-bold text-slate-600 truncate max-w-[100px]">{user.leaderName || (user.leaderId ? users.find(u => String(u.id) === String(user.leaderId))?.name || 'Terhubung' : '-')}</p>
+                                            </div>
+                                        ) : user.roleName === 'Head IT' && (
+                                            <div className="flex justify-between items-center border-t border-slate-200/50 pt-2">
+                                                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">MEMBERS</p>
+                                                <select className="text-[11px] font-bold text-slate-600 bg-transparent outline-none max-w-[100px] truncate cursor-pointer appearance-none text-right" title="Klik untuk melihat staff">
+                                                    <option>Lihat Staff ({user.staffIds?.length || 0})</option>
+                                                    {users.filter(u => user.staffIds?.includes(String(u.id))).map(staff => (
+                                                        <option key={staff.id} value={staff.id}>{staff.name}</option>
+                                                    ))}
+                                                </select>
                                             </div>
                                         )}
                                     </div>
@@ -428,7 +593,7 @@ export default function DashboardAdmin() {
                                         >
                                             Lihat
                                         </button>
-
+                                        {user.status === 'Aktif' && (
                                         <button
                                             type="button"
                                             onClick={() => openEditModal(user)}
@@ -439,7 +604,7 @@ export default function DashboardAdmin() {
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                                             </svg>
                                         </button>
-
+                                        )}
                                         {/* <button
                                             type="button"
                                             onClick={(e) => {
@@ -455,7 +620,7 @@ export default function DashboardAdmin() {
                                             </svg>
                                         </button> */}
 
-                                        {user.status === 'Non Aktif' && (
+                                        {/* {user.status === 'Non Aktif' && (
                                             <button
                                                 type="button"
                                                 onClick={(e) => {
@@ -473,20 +638,34 @@ export default function DashboardAdmin() {
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                                 </svg>
                                             </button>
-                                        )}
+                                        )} */}
                                     </div>
                                     <div className="mt-5 flex items-center justify-center gap-2 w-full">
+                                        {user.status === 'Aktif' && (
                                         <button
-                                            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-full text-[11px] font-bold text-white shadow-sm transition-all active:scale-95 cursor-pointer bg-[#3B82F6] hover:bg-[#2563EB]`}
+                                            type="button"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleResetPassword(user);
+                                            }}
+                                            disabled={resetPasswordUserId === String(user.id)}
+                                            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-full text-[11px] font-bold text-white shadow-sm transition-all active:scale-95 bg-[#3B82F6] hover:bg-[#2563EB] disabled:cursor-wait disabled:opacity-70`}
                                             title={'Reset Password'}
                                         >
-                                            Reset Password
+                                            {resetPasswordUserId === String(user.id) ? 'Mengirim...' : 'Reset Password'}
                                         </button>
+                                        )}
                                         <button
-                                            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-full text-[11px] font-bold text-white shadow-sm transition-all active:scale-95 cursor-pointer bg-rose-500 hover:bg-rose-600`}
+                                            type="button"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleDisableUser(user);
+                                            }}
+                                            disabled={disableUserId === String(user.id) || user.status === 'Non Aktif'}
+                                            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-full text-[11px] font-bold text-white shadow-sm transition-all active:scale-95 bg-rose-500 hover:bg-rose-600 disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:bg-rose-500`}
                                             title={'Non Aktifkan'}
                                         >
-                                            Non Aktifkan
+                                            {disableUserId === String(user.id) ? 'Memproses...' : user.status === 'Non Aktif' ? 'Non Aktif' : 'Non Aktifkan'}
                                         </button>
                                     </div>
                                 </div>
@@ -498,15 +677,15 @@ export default function DashboardAdmin() {
                     {totalPages > 1 && (
                         <div className="mt-12 flex justify-center pb-8">
                             <div className="bg-white/80 backdrop-blur-sm rounded-full flex items-center px-4 py-2 gap-2 shadow-sm border border-slate-200/50">
-                                <button 
+                                <button
                                     onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                                     disabled={currentPage === 1}
                                     className="p-1 text-slate-400 hover:text-blue-600 disabled:opacity-50 font-bold transition-colors"
                                 >
                                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M15 19l-7-7 7-7" /></svg>
                                 </button>
-                                
-                                {Array.from({length: totalPages}, (_, i) => i + 1).map(page => (
+
+                                {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
                                     <button
                                         key={page}
                                         onClick={() => setCurrentPage(page)}
@@ -515,8 +694,8 @@ export default function DashboardAdmin() {
                                         {page}
                                     </button>
                                 ))}
-                                
-                                <button 
+
+                                <button
                                     onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                                     disabled={currentPage === totalPages}
                                     className="p-1 text-slate-400 hover:text-blue-600 disabled:opacity-50 font-bold transition-colors"
@@ -533,11 +712,11 @@ export default function DashboardAdmin() {
             {selectedUser && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
                     {/* Backdrop */}
-                    <div 
-                        className="absolute inset-0 bg-slate-900/40 backdrop-blur-md animate-fade-in transition-opacity" 
+                    <div
+                        className="absolute inset-0 bg-slate-900/40 backdrop-blur-md animate-fade-in transition-opacity"
                         onClick={() => setSelectedUser(null)}
                     ></div>
-                    
+
                     {/* Modal Content */}
                     <div className="bg-white rounded-[32px] w-full max-w-md shadow-2xl relative z-10 animate-scale-up overflow-hidden border border-white/80 ring-1 ring-slate-100/50">
 
@@ -545,10 +724,10 @@ export default function DashboardAdmin() {
                         <div className={`h-36 w-full relative ${selectedUser.status === 'Aktif' ? 'bg-gradient-to-br from-blue-500 via-[#3B82F6] to-blue-700' : 'bg-gradient-to-br from-slate-400 via-slate-500 to-slate-700'}`}>
                             {/* Decorative element inside cover */}
                             <div className="absolute inset-0 opacity-20 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] mix-blend-overlay"></div>
-                            
-                            <button 
-                                type="button" 
-                                onClick={() => setSelectedUser(null)} 
+
+                            <button
+                                type="button"
+                                onClick={() => setSelectedUser(null)}
                                 className="absolute top-4 right-4 text-white hover:bg-white/25 p-2 rounded-full transition-all backdrop-blur-md cursor-pointer active:scale-95 shadow-sm"
                             >
                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -566,32 +745,42 @@ export default function DashboardAdmin() {
                         <div className="px-8 pb-8 pt-0 relative bg-white">
                             {/* Avatar Section */}
                             <div className="absolute -top-16 left-8 flex items-end">
-                                <div className="w-[120px] h-[120px] rounded-full border-[6px] border-white shadow-xl overflow-hidden bg-white rotate-3 hover:rotate-0 transition-transform duration-300">
-                                    <img 
-                                        src={selectedUser.avatar} 
-                                        alt="Avatar" 
-                                        className={`w-full h-full object-cover -rotate-3 hover:rotate-0 transition-transform duration-300 ${selectedUser.status === 'Non Aktif' ? 'grayscale opacity-80' : ''}`} 
-                                    />
+                                <div className="w-[120px] h-[120px] rounded-full border-[6px] border-white shadow-xl overflow-hidden bg-blue-100 rotate-3 hover:rotate-0 transition-transform duration-300 flex items-center justify-center text-5xl font-black text-blue-600">
+                                    <div className={`w-full h-full flex items-center justify-center -rotate-3 hover:rotate-0 transition-transform duration-300 ${selectedUser.status === 'Non Aktif' ? 'grayscale opacity-80' : ''}`}>
+                                        {(selectedUser.name && selectedUser.name !== '-') ? selectedUser.name.charAt(0).toUpperCase() : (selectedUser.username && selectedUser.username !== '-' ? selectedUser.username.charAt(0).toUpperCase() : '?')}
+                                    </div>
                                 </div>
                                 <div className={`absolute bottom-2 right-2 w-6 h-6 rounded-full border-[3px] border-white shadow-md z-10 ${selectedUser.status === 'Aktif' ? 'bg-[#22c55e]' : 'bg-rose-500'}`}></div>
                             </div>
 
                             {/* User Info Section */}
-                            <div className="mt-[4.5rem]">
-                                <h2 className="text-[26px] font-black text-slate-800 tracking-tight leading-none">{selectedUser.name}</h2>
-                                <p className="text-sm font-bold text-blue-500 mt-1.5">@{selectedUser.username}</p>
+                            <div className="ml-[136px] pt-3 min-h-[4rem]">
+                                <h2 className="text-[26px] font-black text-slate-800 tracking-tight leading-none truncate pr-4">{selectedUser.name}</h2>
+                                <p className="text-sm font-bold text-blue-500 mt-1.5 truncate pr-4">@{selectedUser.username}</p>
+                            </div>
 
-                                <div className="flex flex-wrap gap-2.5 mt-5">
-                                    <span className={`px-4 py-1.5 rounded-xl text-[11px] font-black tracking-widest uppercase border shadow-sm ${selectedUser.roleName === 'Head IT' ? 'bg-rose-50 text-rose-600 border-rose-100' : 'bg-amber-50 text-amber-600 border-amber-100'}`}>
-                                        {selectedUser.roleName}
+                            <div className="flex flex-wrap gap-2.5 mt-8">
+                                <span className={`px-4 py-1.5 rounded-xl text-[11px] font-black tracking-widest uppercase border shadow-sm ${selectedUser.roleName === 'Head IT' ? 'bg-rose-50 text-rose-600 border-rose-100' : 'bg-amber-50 text-amber-600 border-amber-100'}`}>
+                                    {selectedUser.roleName}
+                                </span>
+                                {selectedUser.roleName === 'Staff IT' && (selectedUser.leaderName || selectedUser.leaderId) && (
+                                    <span className="px-4 py-1.5 bg-blue-50 text-blue-600 rounded-xl text-[11px] font-black tracking-widest uppercase border border-blue-100 flex items-center gap-1.5 shadow-sm">
+                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>
+                                        Leader: {selectedUser.leaderName || users.find(u => String(u.id) === String(selectedUser.leaderId))?.name || 'Terhubung'}
                                     </span>
-                                    {selectedUser.roleName === 'Staff IT' && (selectedUser.leaderName || selectedUser.leaderId) && (
-                                        <span className="px-4 py-1.5 bg-blue-50 text-blue-600 rounded-xl text-[11px] font-black tracking-widest uppercase border border-blue-100 flex items-center gap-1.5 shadow-sm">
-                                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>
-                                            Leader: {selectedUser.leaderName || users.find(u => String(u.id) === String(selectedUser.leaderId))?.name || 'Terhubung'}
-                                        </span>
-                                    )}
-                                </div>
+                                )}
+                                {selectedUser.roleName === 'Head IT' && selectedUser.staffIds && selectedUser.staffIds.length > 0 && (
+                                    <span className="px-4 py-1.5 bg-indigo-50 text-indigo-600 rounded-xl text-[11px] font-black tracking-widest uppercase border border-indigo-100 flex items-center gap-1.5 shadow-sm">
+                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                                        <select className="bg-transparent outline-none cursor-pointer appearance-none font-black text-indigo-600">
+                                            <option>MEMBERS: {selectedUser.staffIds.length} Staff</option>
+                                            {users.filter(u => selectedUser.staffIds?.includes(String(u.id))).map(staff => (
+                                                <option key={staff.id} value={staff.id}>{staff.name}</option>
+                                            ))}
+                                        </select>
+                                    </span>
+                                )}
+                            </div>
 
                                 <div className="mt-7 space-y-3.5">
                                     {/* Email Card */}
@@ -639,7 +828,6 @@ export default function DashboardAdmin() {
                                         </p>
                                     </div>
                                 )}
-                            </div>
                         </div>
                     </div>
                 </div>
@@ -734,17 +922,18 @@ export default function DashboardAdmin() {
                                     className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3 text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 transition-all"
                                 />
                             </div>
-                            
+
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-1.5 ml-1">Username</label>
-                                    <input
-                                        type="text"
-                                        required
-                                        value={editFormData.username}
-                                        onChange={(e) => setEditFormData({ ...editFormData, username: e.target.value })}
-                                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3 text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 transition-all"
-                                    />
+                                    <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-1.5 ml-1">Role</label>
+                                    <select
+                                        value={editFormData.roleName}
+                                        onChange={(e) => setEditFormData({ ...editFormData, roleName: e.target.value as User['roleName'] })}
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3 text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 transition-all appearance-none cursor-pointer"
+                                    >
+                                        <option value="Staff IT">Staff IT</option>
+                                        <option value="Head IT">Head IT</option>
+                                    </select>
                                 </div>
                                 <div>
                                     <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-1.5 ml-1">No. Handphone</label>
@@ -769,64 +958,73 @@ export default function DashboardAdmin() {
                                 />
                             </div>
 
-                            {/* Pilihan Leader (Khusus Staff IT) */}
-                            {/* {editUser.roleName === 'Staff IT' && (
+                            {/* Menampilkan Leader (Khusus Staff IT) */}
+                            {editFormData.roleName === 'Staff IT' && (
                                 <div>
-                                    <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-1.5 ml-1">Pilih Leader (Head IT)</label>
-                                    <select
-                                        value={editFormData.leaderId || ''}
-                                        onChange={(e) => setEditFormData({ ...editFormData, leaderId: e.target.value || null })}
-                                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3 text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 transition-all cursor-pointer appearance-none"
-                                    >
-                                        <option value="">— Tidak Terhubung (Lepas Leader) —</option>
-                                        {getHeads().filter(h => h.status === 'Aktif').map(head => (
-                                            <option key={head.id} value={head.id}>{head.name}</option>
-                                        ))}
-                                    </select>
+                                    <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-1.5 ml-1">Leader (Head IT)</label>
+                                    <div className="w-full bg-slate-100 border border-slate-200 rounded-2xl px-5 py-3 text-sm font-bold text-slate-500">
+                                        {editFormData.leaderId ? (users.find(u => String(u.id) === String(editFormData.leaderId))?.name || 'Terhubung') : 'Belum Ada Leader'}
+                                    </div>
                                 </div>
-                            )} */}
+                            )}
 
                             {/* Pilihan Staffs (Khusus Head IT) */}
-                            {editUser.roleName === 'Head IT' && (
+                            {editFormData.roleName === 'Head IT' && (
                                 <div>
-                                    <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-1.5 ml-1">Pilih Staff IT (Bawahan)</label>
-                                    <div className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 max-h-40 overflow-y-auto space-y-2.5">
-                                        {getStaffs().filter(s => s.status === 'Aktif' || editFormData.staffIds?.includes(String(s.id))).length === 0 ? (
-                                            <p className="text-xs text-slate-400 italic text-center py-2">Tidak ada Staff IT Aktif tersedia.</p>
-                                        ) : (
-                                            getStaffs()
-                                                .filter(s => s.status === 'Aktif' || editFormData.staffIds?.includes(String(s.id)))
-                                                .map(staff => {
-                                                    const isSelected = editFormData.staffIds?.includes(String(staff.id));
-                                                    const isOwnedByOther = staff.leaderId && staff.leaderId !== String(editUser.id);
-                                                    return (
-                                                        <label key={staff.id} className="flex items-center gap-3 cursor-pointer group">
-                                                            <div className="relative flex items-center">
-                                                                <input
-                                                                    type="checkbox"
-                                                                    checked={isSelected || false}
-                                                                    onChange={(e) => {
-                                                                        const current = editFormData.staffIds || [];
-                                                                        if (e.target.checked) {
-                                                                            setEditFormData({ ...editFormData, staffIds: [...current, String(staff.id)] });
-                                                                        } else {
-                                                                            setEditFormData({ ...editFormData, staffIds: current.filter(id => id !== String(staff.id)) });
-                                                                        }
-                                                                    }}
-                                                                    className="w-5 h-5 rounded-[6px] border-slate-300 text-indigo-500 focus:ring-indigo-400 transition-all cursor-pointer peer"
-                                                                />
-                                                            </div>
-                                                            <div className="flex flex-col">
-                                                                <span className="text-sm font-bold text-slate-700 group-hover:text-indigo-600 transition-colors">{staff.name}</span>
-                                                                {isOwnedByOther && !isSelected && (
-                                                                    <span className="text-[10px] font-bold text-rose-400">Sudah terhubung ke leader lain</span>
-                                                                )}
-                                                            </div>
-                                                        </label>
-                                                    );
-                                                })
-                                        )}
-                                    </div>
+                                    <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-1.5 ml-1">Pilih Staff IT (MEMBERS)</label>
+                                    <details className="w-full bg-slate-50 border border-slate-200 rounded-2xl group [&_summary::-webkit-details-marker]:hidden">
+                                        <summary className="px-5 py-3 text-sm font-bold text-slate-700 outline-none flex items-center justify-between cursor-pointer select-none">
+                                            <span>Pilih Staff ({editFormData.staffIds?.length || 0} Terpilih)</span>
+                                            <svg className="w-4 h-4 text-slate-400 group-open:rotate-180 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" /></svg>
+                                        </summary>
+                                        <div className="p-4 border-t border-slate-200 max-h-40 overflow-y-auto space-y-2.5 bg-white rounded-b-2xl">
+                                            {users
+                                                .filter(u => u.roleName === 'Staff IT' && String(u.id) !== String(editUser.id))
+                                                .filter(s => s.status === 'Aktif' || editFormData.staffIds?.includes(String(s.id))).length === 0 ? (
+                                                <p className="text-xs text-slate-400 italic text-center py-2">Tidak ada Staff IT Aktif tersedia.</p>
+                                            ) : (
+                                                users
+                                                    .filter(u => u.roleName === 'Staff IT' && String(u.id) !== String(editUser.id))
+                                                    .filter(s => s.status === 'Aktif' || editFormData.staffIds?.includes(String(s.id)))
+                                                    .map(staff => {
+                                                        const isSelected = editFormData.staffIds?.includes(String(staff.id));
+                                                        const isOwnedByOther = Boolean(staff.leaderId && staff.leaderId !== String(editUser.id));
+                                                        return (
+                                                            <label key={staff.id} className={`flex items-center gap-3 ${isOwnedByOther && !isSelected ? 'cursor-not-allowed opacity-60' : 'cursor-pointer group/item'}`}>
+                                                                <div className="relative flex items-center">
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={isSelected || false}
+                                                                        disabled={isOwnedByOther && !isSelected}
+                                                                        onChange={(e) => {
+                                                                            const current = editFormData.staffIds || [];
+                                                                            if (e.target.checked) {
+                                                                                setEditFormData({ ...editFormData, staffIds: [...current, String(staff.id)] });
+                                                                            } else {
+                                                                                setEditFormData({ ...editFormData, staffIds: current.filter(id => id !== String(staff.id)) });
+                                                                            }
+                                                                        }}
+                                                                        className={`w-5 h-5 rounded-[6px] border-slate-300 text-indigo-500 focus:ring-indigo-400 transition-all ${isOwnedByOther && !isSelected ? 'cursor-not-allowed bg-slate-100' : 'cursor-pointer peer'}`}
+                                                                    />
+                                                                </div>
+                                                                <div className="flex flex-col gap-1">
+                                                                    <span className={`text-sm font-bold text-slate-700 ${isOwnedByOther && !isSelected ? '' : 'group-hover/item:text-indigo-600'} transition-colors leading-none`}>{staff.name}</span>
+                                                                    <div className="flex items-center gap-2 mt-0.5">
+                                                                        {isOwnedByOther && !isSelected ? (
+                                                                            <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-rose-50 text-rose-600 border border-rose-100 uppercase tracking-wider">Milik Leader Lain</span>
+                                                                        ) : isSelected ? (
+                                                                            <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-100 uppercase tracking-wider">Terpilih (MEMBERS)</span>
+                                                                        ) : (
+                                                                            <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100 uppercase tracking-wider">Belum Punya Leader</span>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            </label>
+                                                        );
+                                                    })
+                                            )}
+                                        </div>
+                                    </details>
                                 </div>
                             )}
 
@@ -834,16 +1032,18 @@ export default function DashboardAdmin() {
                                 <button
                                     type="button"
                                     onClick={() => setEditUser(null)}
-                                    className="w-1/3 py-3 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold transition-all text-sm"
+                                    disabled={isSavingEdit}
+                                    className="w-1/3 py-3 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold transition-all text-sm disabled:cursor-not-allowed disabled:opacity-70"
                                 >
                                     Batal
                                 </button>
                                 <button
                                     type="submit"
-                                    className="w-2/3 py-3 rounded-2xl bg-indigo-500 hover:bg-indigo-600 text-white font-bold transition-all shadow-[0_8px_20px_rgba(99,102,241,0.25)] text-sm flex items-center justify-center gap-2"
+                                    disabled={isSavingEdit}
+                                    className="w-2/3 py-3 rounded-2xl bg-indigo-500 hover:bg-indigo-600 text-white font-bold transition-all shadow-[0_8px_20px_rgba(99,102,241,0.25)] text-sm flex items-center justify-center gap-2 disabled:cursor-wait disabled:opacity-70"
                                 >
                                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" /></svg>
-                                    Simpan Perubahan
+                                    {isSavingEdit ? 'Menyimpan...' : 'Simpan Perubahan'}
                                 </button>
                             </div>
                         </form>
